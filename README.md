@@ -81,53 +81,6 @@ A lightweight web platform avoids installation and storage issues.
 
 ---
 
-# System Architecture
-
-```mermaid
-flowchart TD
-
-Worker[Delivery Worker Web App]
-Worker --> NextJS[Next.js Platform]
-
-NextJS --> API[Next.js API Routes]
-
-API --> AI[FastAPI AI Engine]
-
-AI --> Model[Risk Prediction Model]
-AI --> Weather[Weather API]
-AI --> Pollution[AQI API]
-AI --> News[News API]
-
-Weather --> Trigger[Disruption Detection]
-Pollution --> Trigger
-News --> Trigger
-
-Trigger --> Claim[Automatic Claim Trigger]
-Claim --> Payout[Payout Calculation]
-```
-
----
-
-# Workflow
-
-```mermaid
-flowchart TD
-
-A[Worker Registers] --> B[Fetch Delivery History]
-B --> C[Determine Worker Zone]
-
-C --> D[AI Risk Assessment]
-D --> E[Weekly Premium Calculation]
-
-E --> F[Worker Purchases Insurance]
-
-G[External Disruption Detected] --> H[Validate Worker Zone]
-H --> I[Calculate Lost Income]
-I --> J[Automatic Payout]
-```
-
----
-
 # AI Risk Modeling
 
 Our AI system combines **three risk signals**.
