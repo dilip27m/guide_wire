@@ -38,6 +38,7 @@ export function useSessionData(): SessionData {
 
 /**
  * Saves premium and worker data to sessionStorage.
+ * Also stores worker_id separately for dashboard DB lookups.
  */
 export function saveSessionData(
   premiumData: PremiumResponse,
@@ -45,4 +46,5 @@ export function saveSessionData(
 ): void {
   sessionStorage.setItem("premiumData", JSON.stringify(premiumData));
   sessionStorage.setItem("workerData", JSON.stringify(workerData));
+  sessionStorage.setItem("worker_id", workerData.worker_id);
 }

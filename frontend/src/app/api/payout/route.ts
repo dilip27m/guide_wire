@@ -1,5 +1,7 @@
-import { NextRequest } from "next/server";
-import { proxyToFastAPI, validateRequiredFields } from "@/lib/api-helpers";
+import { NextRequest, NextResponse } from "next/server";
+import { validateRequiredFields } from "@/lib/api-helpers";
+import { payoutService } from "@/services/payoutService";
+import { AiServiceError } from "@/services/aiService";
 
 const REQUIRED_FIELDS = [
   "disruption_id",
@@ -16,5 +18,13 @@ export async function POST(req: NextRequest) {
   const validationError = validateRequiredFields(body, REQUIRED_FIELDS);
   if (validationError) return validationError;
 
-  return proxyToFastAPI("/get-payout", body);
+  try {
+    const responseData = await payoutService.processPayout(body);
+    return NextResponse.json(responseData);
+  } catch (error) {
+    if (error instanceof AiServiceError) {
+      return NextResponse.json(error.details || { error: error.message }, { status: error.statusCode });
+    }
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
 }

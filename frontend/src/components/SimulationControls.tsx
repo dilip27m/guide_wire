@@ -11,12 +11,16 @@ interface SimulationControlsProps {
   forecastedIncome: number;
   hourlyRate: number;
   ambientTemp: number;
+  workerId: string;
+  city: string;
 }
 
 export default function SimulationControls({
   forecastedIncome,
   hourlyRate,
   ambientTemp,
+  workerId,
+  city,
 }: SimulationControlsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [result, setResult] = useState<PayoutResponse | null>(null);
@@ -32,11 +36,14 @@ export default function SimulationControls({
     try {
       const res = await fetchPayout({
         disruption_id: `${scenario.type}_${Date.now()}`,
+        disruption_type: scenario.type,
         duration_hrs: scenario.duration_hrs,
         cargo_type: scenario.cargo_type,
         forecasted_income: forecastedIncome,
         hourly_rate: hourlyRate,
         ambient_temp: scenario.ambient_temp || ambientTemp,
+        worker_id: workerId,
+        city: city,
       });
       setResult(res);
     } catch (err) {
@@ -111,7 +118,13 @@ export default function SimulationControls({
             </div>
           </div>
 
-          <p className="text-xs text-slate-500 mt-4">
+          {result.payout_id && (
+            <p className="text-xs text-emerald-500/70 mt-3">
+              ✓ Saved to database • Payout ID: {result.payout_id}
+            </p>
+          )}
+
+          <p className="text-xs text-slate-500 mt-2">
             Timestamp: {new Date(result.timestamp).toLocaleString()}
           </p>
         </div>

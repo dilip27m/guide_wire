@@ -42,6 +42,8 @@ export default function SimulatePage() {
         forecastedIncome={premiumData.forecasted_income}
         hourlyRate={premiumData.hourly_rate}
         ambientTemp={premiumData.ambient_temp}
+        workerId={workerData.worker_id}
+        city={workerData.city}
       />
 
       {/* Back to Dashboard */}

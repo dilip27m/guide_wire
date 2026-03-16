@@ -1,4 +1,10 @@
-import { PremiumRequest, PremiumResponse, PayoutRequest, PayoutResponse } from "./types";
+import {
+  PremiumRequest,
+  PremiumResponse,
+  PayoutRequest,
+  PayoutResponse,
+  DashboardData,
+} from "./types";
 
 // --- Custom Error Class ---
 
@@ -17,15 +23,20 @@ export class ApiError extends Error {
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "";
 const CLIENT_TIMEOUT_MS = 10000;
 
-async function apiRequest<T>(url: string, body: unknown): Promise<T> {
+async function apiRequest<T>(
+  url: string,
+  options: { method?: string; body?: unknown } = {}
+): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
 
+  const { method = "POST", body } = options;
+
   try {
     const res = await fetch(`${BASE_URL}${url}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
 
@@ -57,9 +68,22 @@ async function apiRequest<T>(url: string, body: unknown): Promise<T> {
 // --- Typed API Functions ---
 
 export async function fetchPremium(data: PremiumRequest): Promise<PremiumResponse> {
-  return apiRequest<PremiumResponse>("/api/premium", { city: data.city });
+  return apiRequest<PremiumResponse>("/api/premium", {
+    body: {
+      city: data.city,
+      worker_id: data.worker_id,
+      platform: data.delivery_platform,
+    },
+  });
 }
 
 export async function fetchPayout(data: PayoutRequest): Promise<PayoutResponse> {
-  return apiRequest<PayoutResponse>("/api/payout", data);
+  return apiRequest<PayoutResponse>("/api/payout", { body: data });
+}
+
+export async function fetchWorkerDashboard(workerId: string): Promise<DashboardData> {
+  return apiRequest<DashboardData>(
+    `/api/workers?worker_id=${encodeURIComponent(workerId)}`,
+    { method: "GET" }
+  );
 }
