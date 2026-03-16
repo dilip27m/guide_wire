@@ -1,0 +1,65 @@
+import { PremiumRequest, PremiumResponse, PayoutRequest, PayoutResponse } from "./types";
+
+// --- Custom Error Class ---
+
+export class ApiError extends Error {
+  public statusCode: number;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.name = "ApiError";
+    this.statusCode = statusCode;
+  }
+}
+
+// --- Generic Request Helper ---
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "";
+const CLIENT_TIMEOUT_MS = 10000;
+
+async function apiRequest<T>(url: string, body: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${BASE_URL}${url}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new ApiError(
+        err.error || `Request failed with status ${res.status}`,
+        res.status
+      );
+    }
+
+    return res.json();
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError("Request timed out. Please try again.", 408);
+    }
+
+    throw new ApiError(
+      error instanceof Error ? error.message : "Network error",
+      0
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// --- Typed API Functions ---
+
+export async function fetchPremium(data: PremiumRequest): Promise<PremiumResponse> {
+  return apiRequest<PremiumResponse>("/api/premium", { city: data.city });
+}
+
+export async function fetchPayout(data: PayoutRequest): Promise<PayoutResponse> {
+  return apiRequest<PayoutResponse>("/api/payout", data);
+}
