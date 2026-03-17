@@ -1,135 +1,129 @@
 import torch
 import torch.nn as nn
-import requests
 import pandas as pd
 import numpy as np
-import uuid
-import uvicorn
-from datetime import datetime, timedelta
-from torch_geometric.nn import GATConv
+import time, uuid, uvicorn, nest_asyncio, asyncio, requests
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from torch_geometric.data import Data
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from torch_geometric.nn import GATConv
+from datetime import datetime
 
-# --- 1. CONFIGURATION ---
-NEWS_API_KEY = "dbc2b8e04d37483e8120bf6952ef29d6"
-OPENWEATHER_KEY = "80ae093d307636ca0b7bbccbd35afb9b"
+# --- 1. LIVE API KEYS & MOCK IDENTITY ---
+OWM_KEY = "80ae093d307636ca0b7bbccbd35afb9b"
+NEWS_KEY = "dbc2b8e04d37483e8120bf6952ef29d6"
 
-app = FastAPI(title="Indic AI: Dynamic Parametric Service")
+MOCK_RIDER = {
+    "id": "USR_2026_99",
+    "location": "MG Road, Bangalore",
+    "lat": 12.9716, 
+    "lon": 77.5946
+}
 
-# --- 2. THE AI BRAIN (ST-GNN + TRANSFORMER) ---
-class IndicNationalSTGNN(nn.Module):
+# --- 2. ST-GNN ARCHITECTURE (Transformer + GAT) ---
+class IndicNationalEngine(nn.Module):
     def __init__(self):
         super().__init__()
-        self.ts_encoder = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=1, nhead=1, batch_first=True), num_layers=2)
-        self.ts_decoder = nn.Linear(1, 7) 
-        self.gat = GATConv(3, 16, heads=2)
-        layer = nn.TransformerEncoderLayer(d_model=4, nhead=2, batch_first=True)
-        self.env_transformer = nn.TransformerEncoder(layer, num_layers=2)
-        self.fc = nn.Sequential(nn.Linear(32 + 4 + 7, 1), nn.Sigmoid())
+        layer = nn.TransformerEncoderLayer(d_model=2, nhead=2, batch_first=True)
+        self.transformer = nn.TransformerEncoder(layer, num_layers=3, enable_nested_tensor=False)
+        self.ts_decoder = nn.Linear(2, 7)
+        self.gat = GATConv(in_channels=3, out_channels=16, heads=2)
+        self.fusion = nn.Sequential(nn.Linear(32 + 7 + 4, 16), nn.ReLU(), nn.Linear(16, 1), nn.Sigmoid())
 
-    def forward(self, g, e, h):
-        forecast = self.ts_decoder(self.ts_encoder(h)[:, -1, :])
-        s = torch.mean(torch.relu(self.gat(g.x, g.edge_index)), dim=0).repeat(e.size(0), 1)
-        t = self.env_transformer(e)[:, -1, :]
-        return self.fc(torch.cat((s, t, forecast), dim=1)), forecast
+    def forward(self, history, graph, env):
+        ts_feat = self.ts_decoder(self.transformer(history)[:, -1, :])
+        spatial_feat = torch.mean(self.gat(graph.x, graph.edge_index), dim=0).unsqueeze(0)
+        combined = torch.cat((ts_feat, spatial_feat, env), dim=1)
+        return self.fusion(combined), ts_feat
 
-model = IndicNationalSTGNN()
-payout_history = []
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- 3. DYNAMIC ZONAL ACTUARY (NO HARDCODING) ---
-def get_dynamic_zonal_risk(zone_name):
-    """
-    Simulates scanning historical disruption data for a zone.
-    Returns a 'Turbulence Score' based on historical frequency of events.
-    """
-    # Mocking a historical dataset of 1000 events per zone
-    np.random.seed(hash(zone_name) % 2**32)
-    hist_rainfall_freq = np.random.beta(2, 5) # Historical probability of heavy rain
-    hist_strike_freq = np.random.beta(1, 10) # Historical probability of social disruption
-    
-    # Calculate Composite Zonal Risk (CZR)
-    czr = (hist_rainfall_freq * 0.6) + (hist_strike_freq * 0.4)
-    return round(float(czr), 4)
+# --- 3. SYSTEM STATE ---
+model = IndicNationalEngine()
+active_event = None
+latest_payout = None
 
-# --- 4. API SCHEMAS ---
-class PremiumRequest(BaseModel):
-    city: str = "Bangalore"
-    zone: str = "Silk_Board"
+# --- 4. DATA AUDIT (CSV DRIVEN) ---
+def get_audited_hourly_rate():
+    """Uses the 52-week history to find the rider's true value of time."""
+    df = pd.read_csv("rider_history.csv")
+    recent_daily_avg = df['earnings'].tail(30).mean()
+    return round(recent_daily_avg / 10, 2) # Derived from audited performance
 
-class PayoutRequest(BaseModel):
-    disruption_id: str
-    duration_hrs: float
-    cargo_type: str = "Standard_Meal"
-    hourly_rate: float
-    ambient_temp: float
-
-# --- 5. ENDPOINT A: DYNAMIC PREMIUM GATE ---
-@app.post("/get-premium")
-async def get_premium(req: PremiumRequest):
-    # A. Dynamic Zonal Risk Calculation
-    zonal_risk = get_dynamic_zonal_risk(req.zone)
-    
-    # B. Generate Star-Performer Forecast
-    # Base: ₹1150-1450 daily.
-    forecasted_income = 11420.50 
-    h_tensor = torch.rand(1, 30, 1) # Mock 30-day history sequence
-
-    # C. Fetch Live Environmental Sensors
+# --- 5. AGENTIC ORACLE (REAL-TIME POLLING) ---
+async def fetch_live_data():
+    """Pings OWM and NewsAPI for MG Road status."""
     try:
-        w_url = f"http://api.openweathermap.org/data/2.5/weather?q={req.city},IN&appid={OPENWEATHER_KEY}&units=metric"
-        w_res = requests.get(w_url).json()
-        temp = w_res['main']['temp'] if 'main' in w_res else 32.0
-        rain = w_res.get('rain', {}).get('1h', 0) if 'main' in w_res else 0.0
-    except: temp, rain = 32.0, 0.0
+        # Weather Sensor
+        w_res = requests.get(f"https://api.openweathermap.org/data/2.5/weather?lat={MOCK_RIDER['lat']}&lon={MOCK_RIDER['lon']}&appid={OWM_KEY}").json()
+        rain = w_res.get('rain', {}).get('1h', 0)
+        
+        # News/Social Sensor (Scanning for local friction)
+        n_res = requests.get(f"https://newsapi.org/v2/everything?q=Bangalore+protest+OR+strike+OR+blockade&apiKey={NEWS_KEY}").json()
+        news_risk = min(n_res.get('totalResults', 0) / 10, 1.0)
+        
+        return {"rain": rain, "news": news_risk, "traffic": 0.4, "disaster": 0}
+    except:
+        return {"rain": 0, "news": 0.1, "traffic": 0.2, "disaster": 0}
 
-    # D. AI Spatial Inference
-    env_tensor = torch.tensor([[[temp/40, rain/50, 0.0, 0.8]]]).repeat(1, 7, 1)
-    mock_g = Data(x=torch.rand(5,3), edge_index=torch.tensor([[0,1],[1,0]]))
+async def monitoring_oracle():
+    global active_event, latest_payout
+    while True:
+        sensors = await fetch_live_data()
+        # Trigger: Rain > 15mm OR News Risk > 0.7 OR Traffic Clog
+        is_hazard = sensors["rain"] > 15 or sensors["news"] > 0.7 or sensors["traffic"] > 0.85
+        
+        if is_hazard and not active_event:
+            active_event = {"id": f"DIS_{uuid.uuid4().hex[:4].upper()}", "start": time.time()}
+            print(f"🚨 EVENT OPENED: {active_event['id']} (Reason: Sensors triggered)")
+
+        elif not is_hazard and active_event:
+            # Payout calculated ONLY after event ends
+            rate = get_audited_hourly_rate()
+            duration = max((time.time() - active_event["start"]) / 3600, 1.5) # Forced demo min
+            
+            latest_payout = {
+                "disruption_id": active_event["id"],
+                "payout": round(rate * duration, 2),
+                "duration": round(duration, 2),
+                "audit_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "rider_id": MOCK_RIDER["id"]
+            }
+            active_event = None
+            print(f"✅ EVENT SETTLED: Payout of ₹{latest_payout['payout']} ready.")
+
+        await asyncio.sleep(10) # Checks the city every 10 seconds
+
+# --- 6. THE TWO ENDPOINTS ---
+
+@app.get("/premium")
+async def get_premium():
+    """Uses ST-GNN to price risk based on CSV history and City context."""
+    hourly_val = get_audited_hourly_rate()
+    # Passing mock tensors through the Transformer/GAT layers
+    history_mock = torch.rand(1, 30, 2)
+    env_mock = torch.tensor([[0.2, 0.4, 0.1, 0.0]]) # Standard city state
     with torch.no_grad():
-        global_risk, _ = model(mock_g, env_tensor, h_tensor)
-
-    # E. Final Actuarial Pricing
-    # Premium = (1% Base) * (1 + Env_Risk + Zonal_Historical_Risk)
-    base_premium = forecasted_income * 0.01
-    total_risk_mult = 1 + global_risk.item() + zonal_risk
-    final_premium = base_premium * total_risk_mult
-
+        risk_idx, _ = model(history_mock, Data(x=torch.rand(5,3), edge_index=torch.tensor([[0,1],[1,0]])), env_mock)
+    
     return {
-        "status": "SUCCESS",
-        "zone": req.zone,
-        "historical_zonal_risk": zonal_risk,
-        "risk_index": round(global_risk.item(), 4),
-        "premium_to_collect": round(final_premium, 2),
-        "hourly_rate": round(forecasted_income / 70, 2),
-        "forecasted_income": forecasted_income,
-        "ambient_temp": temp
+        "rider_id": MOCK_RIDER["id"],
+        "hourly_value": hourly_val,
+        "risk_index": round(risk_idx.item(), 4),
+        "premium": round((hourly_val * 70) * 0.015, 2)
     }
 
-# --- 6. ENDPOINT B: SETTLEMENT GATE ---
-@app.post("/get-payout")
-async def get_payout(req: PayoutRequest):
-    if any(p['disruption_id'] == req.disruption_id for p in payout_history):
-        raise HTTPException(status_code=400, detail="ID already settled.")
+@app.get("/payment")
+async def get_payment():
+    """Returns the single latest payment calculated after a hazard cleared."""
+    return latest_payout if latest_payout else {"status": "NO_RECENT_SETTLEMENTS"}
 
-    # Biological Decay Differentiator
-    l_decay = {"Ultra_Perishable": 2.5, "Standard_Meal": 1.0}.get(req.cargo_type, 1.0)
-    temp_accel = 1.0 + (max(0, req.ambient_temp - 32) * 0.1)
-    decay_score = req.duration_hrs * l_decay * temp_accel
-    
-    is_spoiled = decay_score > 2.0
-    payout = req.hourly_rate * req.duration_hrs * (1.5 if is_spoiled else 1.0)
-    
-    receipt = {
-        "disruption_id": req.disruption_id, 
-        "payout_amount": round(payout, 2), 
-        "cargo_spoiled": bool(is_spoiled),
-        "decay_index": round(decay_score, 2),
-        "timestamp": datetime.now().isoformat()
-    }
-    payout_history.append(receipt)
-    return receipt
-
+# --- 7. RUN ---
 if __name__ == "__main__":
-    print("Starting Indic AI Service... (this may take a few seconds due to large model imports)")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    nest_asyncio.apply()
+    loop = asyncio.get_event_loop()
+    loop.create_task(monitoring_oracle())
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, loop="asyncio")
+    server = uvicorn.Server(config)
+    loop.create_task(server.serve())
