@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+torch
+torch_geometric
+requests
+pandas
+numpy
+pydantic
+tqdm
