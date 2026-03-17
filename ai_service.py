@@ -99,9 +99,10 @@ async def get_premium(req: PremiumRequest):
         "status": "SUCCESS",
         "zone": req.zone,
         "historical_zonal_risk": zonal_risk,
-        "live_global_risk": round(global_risk.item(), 4),
-        "weekly_premium": round(final_premium, 2),
-        "hourly_payout_rate": round(forecasted_income / 70, 2),
+        "risk_index": round(global_risk.item(), 4),
+        "premium_to_collect": round(final_premium, 2),
+        "hourly_rate": round(forecasted_income / 70, 2),
+        "forecasted_income": forecasted_income,
         "ambient_temp": temp
     }
 
@@ -119,9 +120,16 @@ async def get_payout(req: PayoutRequest):
     is_spoiled = decay_score > 2.0
     payout = req.hourly_rate * req.duration_hrs * (1.5 if is_spoiled else 1.0)
     
-    receipt = {"disruption_id": req.disruption_id, "amount": round(payout, 2), "spoiled": bool(is_spoiled)}
+    receipt = {
+        "disruption_id": req.disruption_id, 
+        "payout_amount": round(payout, 2), 
+        "cargo_spoiled": bool(is_spoiled),
+        "decay_index": round(decay_score, 2),
+        "timestamp": datetime.now().isoformat()
+    }
     payout_history.append(receipt)
     return receipt
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print("Starting Indic AI Service... (this may take a few seconds due to large model imports)")
+    uvicorn.run(app, host="127.0.0.1", port=8000)
