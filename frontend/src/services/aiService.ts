@@ -54,6 +54,6 @@ async function fetchFromAI(endpoint: string, body: unknown) {
 }
 
 export const aiService = {
-  getPremium: (city: string) => fetchFromAI("/get-premium", { city }),
+  getPremium: (worker_id: string) => fetchFromAI("/get-premium", { worker_id }),
   getPayout: (body: any) => fetchFromAI("/get-payout", body),
 };

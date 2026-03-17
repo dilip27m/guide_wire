@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { WorkerData } from "@/lib/types";
-import { CITIES, PLATFORMS } from "@/lib/constants";
 import Spinner from "@/components/ui/Spinner";
 
 interface WorkerFormProps {
@@ -11,14 +10,12 @@ interface WorkerFormProps {
 }
 
 export default function WorkerForm({ onSubmit, loading }: WorkerFormProps) {
-  const [city, setCity] = useState<string>(CITIES[0]);
   const [workerId, setWorkerId] = useState("");
-  const [platform, setPlatform] = useState<string>(PLATFORMS[0]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!workerId.trim()) return;
-    onSubmit({ city, worker_id: workerId.trim(), delivery_platform: platform });
+    onSubmit({ worker_id: workerId.trim() });
   };
 
   return (
@@ -37,44 +34,9 @@ export default function WorkerForm({ onSubmit, loading }: WorkerFormProps) {
           required
           className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
         />
-      </div>
-
-      {/* City */}
-      <div>
-        <label htmlFor="city" className="block text-sm font-medium text-slate-300 mb-2">
-          City
-        </label>
-        <select
-          id="city"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
-        >
-          {CITIES.map((c) => (
-            <option key={c} value={c} className="bg-slate-800 text-white">
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Delivery Platform */}
-      <div>
-        <label htmlFor="platform" className="block text-sm font-medium text-slate-300 mb-2">
-          Delivery Platform
-        </label>
-        <select
-          id="platform"
-          value={platform}
-          onChange={(e) => setPlatform(e.target.value)}
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
-        >
-          {PLATFORMS.map((p) => (
-            <option key={p} value={p} className="bg-slate-800 text-white">
-              {p}
-            </option>
-          ))}
-        </select>
+        <p className="mt-2 text-xs text-slate-500">
+          Note: Your city and platform are automatically verified via delivery history.
+        </p>
       </div>
 
       {/* Submit */}

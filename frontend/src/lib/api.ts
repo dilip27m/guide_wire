@@ -4,6 +4,7 @@ import {
   PayoutRequest,
   PayoutResponse,
   DashboardData,
+  PolicyActivationRequest,
 } from "./types";
 
 // --- Custom Error Class ---
@@ -70,9 +71,7 @@ async function apiRequest<T>(
 export async function fetchPremium(data: PremiumRequest): Promise<PremiumResponse> {
   return apiRequest<PremiumResponse>("/api/premium", {
     body: {
-      city: data.city,
       worker_id: data.worker_id,
-      platform: data.delivery_platform,
     },
   });
 }
@@ -86,4 +85,8 @@ export async function fetchWorkerDashboard(workerId: string): Promise<DashboardD
     `/api/workers?worker_id=${encodeURIComponent(workerId)}`,
     { method: "GET" }
   );
+}
+
+export async function activatePolicy(data: PolicyActivationRequest): Promise<{ status: string; policy_id: string; payment_id: string }> {
+  return apiRequest<{ status: string; policy_id: string; payment_id: string }>("/api/activate", { body: data });
 }

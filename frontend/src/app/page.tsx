@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import PageShell from "@/components/ui/PageShell";
 import ErrorAlert from "@/components/ui/ErrorAlert";
+import Spinner from "@/components/ui/Spinner";
 import WorkerForm from "@/components/WorkerForm";
 import PremiumCard from "@/components/PremiumCard";
+import PaymentModal from "@/components/PaymentModal";
 import { WorkerData, PremiumResponse } from "@/lib/types";
-import { fetchPremium } from "@/lib/api";
+import { fetchPremium, activatePolicy } from "@/lib/api";
 import { saveSessionData } from "@/hooks/useSessionData";
 
 export default function HomePage() {
@@ -16,6 +18,8 @@ export default function HomePage() {
   const [premiumData, setPremiumData] = useState<PremiumResponse | null>(null);
   const [workerData, setWorkerData] = useState<WorkerData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [activating, setActivating] = useState(false);
 
   const handleSubmit = async (data: WorkerData) => {
     setLoading(true);
@@ -34,8 +38,35 @@ export default function HomePage() {
 
   const handleActivate = () => {
     if (!premiumData || !workerData) return;
-    saveSessionData(premiumData, workerData);
-    router.push("/dashboard");
+    setIsPaymentOpen(true);
+  };
+
+  const handlePaymentSuccess = async (paymentId: string) => {
+    if (!premiumData || !workerData) return;
+    
+    setActivating(true);
+    setIsPaymentOpen(false);
+    
+    try {
+      const response = await activatePolicy({
+        worker_id: workerData.worker_id,
+        payment_id: paymentId,
+        premium_to_collect: premiumData.premium_to_collect,
+        risk_index: premiumData.risk_index,
+        forecasted_income: premiumData.forecasted_income,
+      });
+      
+      const sessionPremium = {
+        ...premiumData,
+        policy_id: response.policy_id,
+      };
+      
+      saveSessionData(sessionPremium, workerData);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to activate policy");
+      setActivating(false);
+    }
   };
 
   return (
@@ -103,6 +134,24 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {premiumData && (
+        <PaymentModal
+          isOpen={isPaymentOpen}
+          onClose={() => setIsPaymentOpen(false)}
+          onSuccess={handlePaymentSuccess}
+          premiumData={premiumData}
+        />
+      )}
+      
+      {activating && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-slate-900 p-8 rounded-2xl border border-white/10 flex flex-col items-center">
+            <Spinner size="lg" />
+            <p className="mt-4 text-white font-medium">Finalizing Policy...</p>
+          </div>
+        </div>
+      )}
     </PageShell>
   );
 }

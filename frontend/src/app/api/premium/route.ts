@@ -5,18 +5,13 @@ import { AiServiceError } from "@/services/aiService";
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
 
-  if (!body?.city || typeof body.city !== "string") {
-    return NextResponse.json({ error: "City is required" }, { status: 400 });
+  if (!body?.worker_id || typeof body.worker_id !== "string") {
+    return NextResponse.json({ error: "Worker ID is required" }, { status: 400 });
   }
-
-  const worker_id = body.worker_id || `WRK-${Date.now()}`;
-  const platform = body.platform || "Unknown";
 
   try {
     const responseData = await premiumService.processPremium({
-      city: body.city,
-      worker_id,
-      platform,
+      worker_id: body.worker_id,
     });
     return NextResponse.json(responseData);
   } catch (error) {

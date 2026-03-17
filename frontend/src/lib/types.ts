@@ -1,9 +1,7 @@
 // --- Request Types ---
 
 export interface PremiumRequest {
-  city: string;
   worker_id: string;
-  delivery_platform: string;
 }
 
 export interface PayoutRequest {
@@ -19,6 +17,13 @@ export interface PayoutRequest {
 }
 
 // --- Response Types ---
+export interface PolicyActivationRequest {
+  worker_id: string;
+  payment_id: string;
+  premium_to_collect: number;
+  risk_index: number;
+  forecasted_income: number;
+}
 
 export interface PremiumResponse {
   status: string;
@@ -43,9 +48,7 @@ export interface PayoutResponse {
 // --- UI Types ---
 
 export interface WorkerData {
-  city: string;
   worker_id: string;
-  delivery_platform: string;
 }
 
 export type DisruptionType = "heavy_rain" | "heatwave" | "strike" | "pollution";

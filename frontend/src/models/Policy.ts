@@ -9,6 +9,7 @@ export interface IPolicy extends Document {
   start_date: Date;
   end_date: Date;
   status: "active" | "expired" | "cancelled";
+  payment_id: string;
 }
 
 const PolicySchema = new Schema<IPolicy>({
@@ -23,6 +24,7 @@ const PolicySchema = new Schema<IPolicy>({
     default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week
   },
   status: { type: String, enum: ["active", "expired", "cancelled"], default: "active" },
+  payment_id: { type: String, required: true },
 });
 
 export const Policy: Model<IPolicy> =

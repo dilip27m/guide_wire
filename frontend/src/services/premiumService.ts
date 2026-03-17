@@ -4,21 +4,19 @@ import { Policy } from "@/models/Policy";
 import { aiService, AiServiceError } from "@/services/aiService";
 
 export interface CreatePremiumInput {
-  city: string;
   worker_id: string;
-  platform: string;
 }
 
 export const premiumService = {
   /**
-   * Process a premium generation request.
-   * Calls the AI service, then creates the worker and policy records.
+   * Process a premium generation request (Quote stage).
+   * Calls the AI service and updates/creates the worker.
    */
   async processPremium(input: CreatePremiumInput) {
     // 1. Call AI Service
     let aiData;
     try {
-      aiData = await aiService.getPremium(input.city);
+      aiData = await aiService.getPremium(input.worker_id);
     } catch (error) {
       if (error instanceof AiServiceError) {
         throw error;
@@ -26,24 +24,50 @@ export const premiumService = {
       throw new AiServiceError("An unexpected error occurred contacting AI", 500);
     }
 
-    // 2. Persist to MongoDB
+    // 2. Persist Worker to MongoDB
     try {
       await connectDB();
 
       // Upsert Worker
-      const worker = await Worker.findOneAndUpdate(
+      await Worker.findOneAndUpdate(
         { worker_id: input.worker_id },
         {
           worker_id: input.worker_id,
-          platform: input.platform,
-          city: input.city,
+          platform: aiData.platform,
+          city: aiData.city,
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
 
+      return {
+        ...aiData,
+        worker_id: input.worker_id,
+      };
+    } catch (dbError) {
+      console.error("[premiumService] DB error:", dbError);
+      return {
+        ...aiData,
+        db_error: "Failed to update worker info. Data is still valid.",
+      };
+    }
+  },
+
+  /**
+   * Activate a policy after successful payment.
+   */
+  async activatePolicy(input: {
+    worker_id: string;
+    payment_id: string;
+    premium_to_collect: number;
+    risk_index: number;
+    forecasted_income: number;
+  }) {
+    try {
+      await connectDB();
+
       // Deactivate any existing active policies
       await Policy.updateMany(
-        { worker_id: worker.worker_id, status: "active" },
+        { worker_id: input.worker_id, status: "active" },
         { status: "expired" }
       );
 
@@ -51,27 +75,24 @@ export const premiumService = {
       const policyId = `POL-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const policy = await Policy.create({
         policy_id: policyId,
-        worker_id: worker.worker_id,
-        weekly_income_prediction: aiData.forecasted_income,
-        premium_paid: aiData.premium_to_collect,
-        risk_index: aiData.risk_index,
+        worker_id: input.worker_id,
+        weekly_income_prediction: input.forecasted_income,
+        premium_paid: input.premium_to_collect,
+        risk_index: input.risk_index,
+        payment_id: input.payment_id,
         start_date: new Date(),
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         status: "active",
       });
 
       return {
-        ...aiData,
-        worker_id: worker.worker_id,
+        status: "SUCCESS",
         policy_id: policy.policy_id,
+        payment_id: policy.payment_id,
       };
-    } catch (dbError) {
-      console.error("[premiumService] DB error:", dbError);
-      // Graceful degradation: return AI data even if DB write fails
-      return {
-        ...aiData,
-        db_error: "Failed to save policy. Data is still valid.",
-      };
+    } catch (error) {
+      console.error("[premiumService] Activation error:", error);
+      throw new Error("Failed to activate policy");
     }
   },
 };
