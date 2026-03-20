@@ -13,6 +13,7 @@ interface NavbarProps {
 const NAV_LINKS: { href: string; label: string; page: ActivePage }[] = [
   { href: "/",          label: "Home",      page: "home"      },
   { href: "/dashboard", label: "Dashboard", page: "dashboard" },
+  { href: "/simulate",  label: "Simulator", page: "simulate"  },
 ];
 
 export default function Navbar({ activePage }: NavbarProps) {

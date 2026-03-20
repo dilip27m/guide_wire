@@ -35,6 +35,7 @@ export default function SimulationControls({
   const [result, setResult] = useState<PayoutResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeScenario, setActiveScenario] = useState<DisruptionScenario | null>(null);
+  const [customDuration, setCustomDuration] = useState<number>(2);
 
   const handleSimulate = async (scenario: DisruptionScenario) => {
     setLoading(scenario.type);
@@ -46,7 +47,7 @@ export default function SimulationControls({
       const res = await fetchPayout({
         disruption_id: `${scenario.type}_${Date.now()}`,
         disruption_type: scenario.type,
-        duration_hrs: scenario.duration_hrs,
+        duration_hrs: customDuration,
         cargo_type: scenario.cargo_type,
         forecasted_income: forecastedIncome,
         hourly_rate: hourlyRate,
@@ -64,6 +65,27 @@ export default function SimulationControls({
 
   return (
     <div className="space-y-6">
+      {/* Judges Controls: Duration Slider */}
+      <div className="bg-white border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+        <label className="flex justify-between items-center mb-4">
+          <span className="font-black uppercase tracking-widest text-slate-900 text-sm">Disruption Duration</span>
+          <span className="font-black text-xl text-red-600 bg-red-100 px-3 py-1 rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">{customDuration} <span className="text-sm">hrs</span></span>
+        </label>
+        <input 
+          type="range" 
+          min="1" 
+          max="24" 
+          step="1"
+          value={customDuration}
+          onChange={(e) => setCustomDuration(Number(e.target.value))}
+          className="w-full h-4 bg-slate-200 rounded-lg appearance-none cursor-pointer border-2 border-slate-900 accent-red-600"
+        />
+        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">
+          <span>1 Hour</span>
+          <span>Day Long (24hrs)</span>
+        </div>
+      </div>
+
       {/* Scenario Buttons */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {SCENARIOS.map((scenario, idx) => {
@@ -89,9 +111,6 @@ export default function SimulationControls({
                   <p className="text-xs text-slate-700 font-bold leading-relaxed mb-3">{scenario.description}</p>
                   
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="px-2 py-1 rounded-none text-[10px] font-black bg-white text-slate-900 border-2 border-slate-900 uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">
-                      {scenario.duration_hrs}h
-                    </span>
                     <span className="px-2 py-1 rounded-none text-[10px] font-black bg-white text-slate-900 border-2 border-slate-900 uppercase tracking-widest shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">
                       {scenario.cargo_type.replace("_", " ")}
                     </span>

@@ -41,8 +41,6 @@ export const payoutService = {
         disruption_id: body.disruption_id,
         amount: aiData.payout_amount,
         status: "simulated",
-        cargo_spoiled: aiData.cargo_spoiled,
-        decay_index: aiData.decay_index,
       });
 
       return {

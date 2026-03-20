@@ -150,7 +150,7 @@ export default function DashboardPage() {
 
         {/* 3. History & Demo Controls (Split Layout) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* Left/Main Column: Payment History (Spans 8 cols strongly) */}
           <div className="lg:col-span-8 h-[600px] flex flex-col">
             {dbLoading ? (
@@ -201,11 +201,10 @@ export default function DashboardPage() {
 
               {/* Inline feedback toast */}
               {settlementMsg && (
-                <div className={`mt-6 flex items-start gap-4 p-5 border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] animate-in fade-in slide-in-from-bottom-4 duration-300 ${
-                  settlementMsg.type === "success" ? "bg-green-100" :
-                  settlementMsg.type === "info"    ? "bg-blue-50"   :
-                  "bg-red-100"
-                }`}>
+                <div className={`mt-6 flex items-start gap-4 p-5 border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] animate-in fade-in slide-in-from-bottom-4 duration-300 ${settlementMsg.type === "success" ? "bg-green-100" :
+                    settlementMsg.type === "info" ? "bg-blue-50" :
+                      "bg-red-100"
+                  }`}>
                   <span className="text-2xl shrink-0 mt-0.5">
                     {settlementMsg.type === "success" ? "✅" : settlementMsg.type === "info" ? "ℹ️" : "❌"}
                   </span>

@@ -174,26 +174,12 @@ async def post_get_payout(req: PayoutRequest):
     _, default_hourly = get_weekly_forecast()
     hourly = req.hourly_rate if req.hourly_rate else default_hourly
     duration = max(req.duration_hrs, 0.5)
-    temp = req.ambient_temp or 25.0
 
-    # Cargo spoilage logic
-    perishable_types = {"perishable", "dairy", "frozen", "pharma"}
-    cargo_spoiled = (
-        (req.cargo_type or "standard").lower() in perishable_types
-        and temp > 35.0
-        and duration > 2.0
-    )
-
-    # Decay index: 0.0–1.0 scale
-    decay_index = round(min(duration / 10.0 * (1 + temp / 100.0), 1.0), 4)
-
-    payout_amount = round(hourly * duration * (1.2 if cargo_spoiled else 1.0), 2)
+    payout_amount = round(hourly * duration, 2)
 
     return {
         "disruption_id": req.disruption_id,
         "payout_amount": payout_amount,
-        "cargo_spoiled": cargo_spoiled,
-        "decay_index": decay_index,
         "timestamp": datetime.now().isoformat(),
     }
 
