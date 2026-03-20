@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GuideWire — AI Parametric Insurance for Delivery Workers",
+  title: "DashSure — AI Parametric Insurance for Delivery Workers",
   description:
     "Automatic compensation when rain, heatwaves, strikes, or pollution disrupt your work. Powered by AI.",
 };
