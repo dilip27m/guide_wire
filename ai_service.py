@@ -234,6 +234,11 @@ async def get_premium():
 async def get_payment():
     return latest_payout if latest_payout else {"status": "STABLE", "message": "No claims recorded."}
 
+@app.get("/cron")
+@app.head("/cron")
+async def get_cron():
+    return {"status": "alive", "timestamp": datetime.now().isoformat()}
+
 if __name__ == "__main__":
     import os
     port = int(os.environ.get("PORT", 8000))
