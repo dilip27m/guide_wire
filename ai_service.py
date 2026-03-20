@@ -155,7 +155,7 @@ async def post_get_premium(req: PremiumRequest):
         )
 
     risk = round(risk_idx.item(), 4)
-    premium = round((forecast * 0.015) * (1 + risk), 2)
+    premium = round((forecast * 0.008) * (1 + risk), 2)
 
     return {
         "status": "ok",
