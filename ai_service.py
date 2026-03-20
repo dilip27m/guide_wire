@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 import numpy as np
-import time, uuid, uvicorn, nest_asyncio, asyncio, requests
+import time, uuid, uvicorn, asyncio, requests
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -250,6 +250,5 @@ async def get_payment():
 
 if __name__ == "__main__":
     import os
-    nest_asyncio.apply()
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("ai_service:app", host="0.0.0.0", port=port, reload=False)
