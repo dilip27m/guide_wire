@@ -1,4 +1,4 @@
-const FASTAPI_URL = process.env.FASTAPI_URL || "http://localhost:8000";
+const FASTAPI_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 const REQUEST_TIMEOUT_MS = 8000;
 
 export class AiServiceError extends Error {
