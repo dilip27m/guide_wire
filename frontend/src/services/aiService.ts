@@ -43,7 +43,7 @@ async function fetchFromAI(endpoint: string, body: unknown) {
 
     if (error instanceof DOMException && error.name === "AbortError") {
       console.error(`[aiService] Timeout on ${endpoint} after ${REQUEST_TIMEOUT_MS}ms`);
-      throw new AiServiceError("AI service timed out. Please try again.", 504);
+      throw new AiServiceError("Server is waking up from sleep. Please wait 60 seconds and try again.", 504);
     }
 
     console.error(`[aiService] Error on ${endpoint}:`, error);

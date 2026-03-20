@@ -130,6 +130,11 @@ export default function SimulationControls({
         })}
       </div>
 
+      {/* Judges Disclaimer */}
+      <p className="text-center font-bold text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed px-4 opacity-80">
+        Judge Notice: If you receive a timeout error, the cloud AI engine is currently waking up from sleep mode. Please wait 1 minute and try again.
+      </p>
+
       {/* Error */}
       {error && <ErrorAlert message={error} />}
 
