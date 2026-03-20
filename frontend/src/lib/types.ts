@@ -34,6 +34,7 @@ export interface PremiumResponse {
   ambient_temp: number;
   worker_id?: string;
   policy_id?: string;
+  already_active?: boolean;
 }
 
 export interface PayoutResponse {
@@ -49,6 +50,8 @@ export interface PayoutResponse {
 
 export interface WorkerData {
   worker_id: string;
+  city?: string;
+  delivery_platform?: string;
 }
 
 export type DisruptionType = "heavy_rain" | "heatwave" | "strike" | "pollution";
@@ -98,5 +101,6 @@ export interface IPayoutData {
 export interface DashboardData {
   worker: IWorkerData;
   policy: IPolicyData | null;
+  policies: IPolicyData[];
   payouts: IPayoutData[];
 }

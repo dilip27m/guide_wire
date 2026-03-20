@@ -13,67 +13,55 @@ export default function DashboardStats({ data, workerId, platform }: DashboardSt
       value: `₹${data.forecasted_income.toFixed(0)}`,
       sub: "AI-predicted",
       icon: "💰",
-      color: "from-emerald-500/20 to-green-500/20",
-      border: "border-emerald-500/30",
-    },
-    {
-      label: "Risk Index",
-      value: `${(data.risk_index * 100).toFixed(1)}%`,
-      sub: data.risk_index > 0.5 ? "High Risk" : data.risk_index > 0.3 ? "Medium Risk" : "Low Risk",
-      icon: "📊",
-      color: data.risk_index > 0.5 ? "from-red-500/20 to-orange-500/20" : "from-amber-500/20 to-yellow-500/20",
-      border: data.risk_index > 0.5 ? "border-red-500/30" : "border-amber-500/30",
+      color: "bg-[#fde047]",
     },
     {
       label: "Weekly Premium",
       value: `₹${data.premium_to_collect.toFixed(2)}`,
       sub: "Auto-deducted",
       icon: "🛡️",
-      color: "from-blue-500/20 to-indigo-500/20",
-      border: "border-blue-500/30",
-    },
-    {
-      label: "Hourly Earning Rate",
-      value: `₹${data.hourly_rate.toFixed(2)}/hr`,
-      sub: "Based on forecast",
-      icon: "⏱️",
-      color: "from-purple-500/20 to-fuchsia-500/20",
-      border: "border-purple-500/30",
+      color: "bg-blue-200",
     },
   ];
 
   return (
-    <div>
+    <div className="space-y-4">
       {/* Worker Info Bar */}
-      <div className="flex items-center gap-4 mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white font-bold text-lg">
+      <div className="flex items-center gap-4 p-4 bg-white border-4 border-slate-900 rounded-xl shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] transition-all hover:-translate-y-0.5 hover:shadow-[8px_8px_0px_0px_rgba(15,23,42,1)]">
+        <div className="w-14 h-14 rounded-lg bg-slate-900 border-2 border-slate-900 flex items-center justify-center text-white font-black text-2xl shadow-[2px_2px_0px_0px_rgba(220,38,38,1)]">
           {workerId.charAt(0).toUpperCase()}
         </div>
-        <div>
-          <p className="font-semibold text-white">{workerId}</p>
-          <p className="text-sm text-slate-400">{platform} • Active Policy</p>
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-lg text-slate-900 tracking-tighter uppercase truncate">{workerId}</p>
+          <p className="text-xs text-slate-600 font-bold uppercase tracking-widest truncate">{platform} • Active Policy</p>
         </div>
-        <div className="ml-auto">
-          <span className="px-3 py-1 text-xs font-medium rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-            ● Covered
+        <div className="flex items-center justify-center px-4 py-2 bg-green-300 border-2 border-slate-900 rounded-lg gap-2 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] shrink-0">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full bg-green-600 opacity-75"></span>
+            <span className="relative inline-flex h-2 w-2 bg-green-700"></span>
           </span>
+          <span className="text-xs font-black text-slate-900 tracking-widest uppercase hidden sm:block">Active</span>
         </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {stats.map((stat) => (
+        {stats.map((stat, idx) => (
           <div
             key={stat.label}
-            className={`bg-gradient-to-br ${stat.color} border ${stat.border} rounded-2xl p-5 backdrop-blur-sm transition-transform hover:scale-[1.02]`}
+            className={`relative overflow-hidden ${stat.color} border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] transition-all hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(15,23,42,1)]`}
           >
-            <div className="flex items-start justify-between">
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-slate-400 mb-1">{stat.label}</p>
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <p className="text-xs text-slate-500 mt-1">{stat.sub}</p>
+                <p className="text-[10px] sm:text-xs font-black mb-1 uppercase tracking-widest text-slate-900">{stat.label}</p>
+                <p className="font-black text-slate-900 tracking-tighter text-3xl sm:text-4xl">
+                  {stat.value}
+                </p>
+                <p className="text-[10px] mt-1 uppercase tracking-widest font-bold text-slate-700">{stat.sub}</p>
               </div>
-              <span className="text-2xl">{stat.icon}</span>
+              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 bg-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] shrink-0">
+                <span className="text-2xl">{stat.icon}</span>
+              </div>
             </div>
           </div>
         ))}

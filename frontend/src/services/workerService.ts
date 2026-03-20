@@ -20,11 +20,16 @@ export const workerService = {
       status: "active",
     }).lean();
 
+    const allPolicies = await Policy.find({
+      worker_id: workerId,
+    }).sort({ start_date: -1 }).lean();
+
     const payouts = await payoutService.getPayoutsByWorker(workerId);
 
     return {
       worker,
       policy: activePolicy,
+      policies: allPolicies,
       payouts,
     };
   },

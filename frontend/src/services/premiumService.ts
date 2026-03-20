@@ -13,6 +13,18 @@ export const premiumService = {
    * Calls the AI service and updates/creates the worker.
    */
   async processPremium(input: CreatePremiumInput) {
+    // 0. Check for Active Policy limit
+    let recentPolicy = null;
+    try {
+      await connectDB();
+      recentPolicy = await Policy.findOne({
+        worker_id: input.worker_id,
+        start_date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      });
+    } catch (e) {
+      console.error("[premiumService] DB check error:", e);
+    }
+
     // 1. Call AI Service
     let aiData;
     try {
@@ -42,12 +54,16 @@ export const premiumService = {
       return {
         ...aiData,
         worker_id: input.worker_id,
+        already_active: !!recentPolicy,
+        policy_id: recentPolicy ? recentPolicy.policy_id : undefined,
       };
     } catch (dbError) {
       console.error("[premiumService] DB error:", dbError);
       return {
         ...aiData,
         db_error: "Failed to update worker info. Data is still valid.",
+        already_active: !!recentPolicy,
+        policy_id: recentPolicy ? recentPolicy.policy_id : undefined,
       };
     }
   },
@@ -64,6 +80,15 @@ export const premiumService = {
   }) {
     try {
       await connectDB();
+
+      // Enforce Weekly Payment Limit (Double Check)
+      const recentPolicy = await Policy.findOne({
+        worker_id: input.worker_id,
+        start_date: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+      });
+      if (recentPolicy) {
+        throw new Error("You have already paid your premium for this week. A new policy can only be activated after 7 days.");
+      }
 
       // Deactivate any existing active policies
       await Policy.updateMany(

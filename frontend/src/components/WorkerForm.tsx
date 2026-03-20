@@ -21,8 +21,8 @@ export default function WorkerForm({ onSubmit, loading }: WorkerFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Worker ID */}
-      <div>
-        <label htmlFor="worker-id" className="block text-sm font-medium text-slate-300 mb-2">
+      <div className="relative group">
+        <label htmlFor="worker-id" className="absolute -top-3 left-4 px-2 bg-white text-xs font-black uppercase tracking-widest text-slate-900 z-10 transition-colors group-focus-within:text-red-600">
           Worker ID
         </label>
         <input
@@ -32,27 +32,35 @@ export default function WorkerForm({ onSubmit, loading }: WorkerFormProps) {
           value={workerId}
           onChange={(e) => setWorkerId(e.target.value)}
           required
-          className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+          className="relative w-full px-5 py-4 sm:py-5 rounded-xl bg-white border-4 border-slate-900 text-slate-900 text-lg font-black uppercase tracking-widest placeholder-slate-400 focus:outline-none focus:bg-yellow-50 focus:shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] transition-all"
         />
-        <p className="mt-2 text-xs text-slate-500">
-          Note: Your city and platform are automatically verified via delivery history.
-        </p>
+        <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+          {workerId.length > 3 && (
+            <span className="text-green-600 flex items-center justify-center w-6 h-6 rounded-full bg-green-100 animate-in fade-in zoom-in duration-300 shadow-sm">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Submit */}
       <button
         type="submit"
         disabled={loading || !workerId.trim()}
-        className="w-full py-3.5 px-6 rounded-xl font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40"
+        className="relative w-full py-4 sm:py-5 px-6 rounded-xl font-black uppercase tracking-widest text-xl text-white bg-slate-900 border-4 border-slate-900 hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(220,38,38,1)] disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-none active:translate-y-1 active:shadow-none transition-all duration-200 shadow-[4px_4px_0px_0px_rgba(220,38,38,1)]"
       >
-        {loading ? (
-          <span className="flex items-center justify-center gap-2">
-            <Spinner size="sm" />
-            Calculating Premium...
-          </span>
-        ) : (
-          "Calculate Premium →"
-        )}
+        <span className="relative flex items-center justify-center gap-2">
+          {loading ? (
+            <>
+              <Spinner size="sm" />
+              Calculating Quote...
+            </>
+          ) : (
+            "Calculate Quote →"
+          )}
+        </span>
       </button>
     </form>
   );

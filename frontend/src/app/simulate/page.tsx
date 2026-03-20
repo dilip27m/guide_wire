@@ -26,15 +26,15 @@ export default function SimulatePage() {
 
   return (
     <PageShell activePage="simulate">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-3xl font-bold">Disruption Simulator</h1>
-          <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-            Demo Mode
+      <div className="mb-6 sm:mb-8 pt-2">
+        <div className="flex items-center gap-4 mb-2">
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase text-slate-900">Simulator</h1>
+          <span className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-none bg-orange-300 text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+            Demo
           </span>
         </div>
-        <p className="text-slate-400">
-          Simulate real-world disruptions to see how the AI calculates payouts for {workerData.worker_id} in {workerData.city}.
+        <p className="text-slate-600 text-sm font-bold uppercase tracking-wide">
+          Test payout engine for <span className="text-red-600 font-black">{workerData.worker_id}</span>
         </p>
       </div>
 
@@ -43,16 +43,16 @@ export default function SimulatePage() {
         hourlyRate={premiumData.hourly_rate}
         ambientTemp={premiumData.ambient_temp}
         workerId={workerData.worker_id}
-        city={workerData.city}
+        city={workerData.city || 'Bangalore'}
       />
 
       {/* Back to Dashboard */}
-      <div className="mt-8 text-center">
+      <div className="mt-8 mb-12 pb-8 sm:pb-0">
         <button
           onClick={() => router.push("/dashboard")}
-          className="text-sm text-slate-400 hover:text-white transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-3 text-sm font-black uppercase tracking-widest text-slate-900 bg-white border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] hover:-translate-y-1 hover:shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] active:translate-y-1 active:shadow-none transition-all"
         >
-          ← Back to Dashboard
+          <span>←</span> Back to Dashboard
         </button>
       </div>
     </PageShell>
