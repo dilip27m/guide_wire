@@ -15,7 +15,7 @@ export default function EmptyState({
   title,
   description,
   actionLabel = "Go to Onboarding →",
-  actionHref = "/",
+  actionHref = "/get-started",
 }: EmptyStateProps) {
   const router = useRouter();
 

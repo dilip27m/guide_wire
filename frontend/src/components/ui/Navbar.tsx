@@ -4,21 +4,25 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 
-export type ActivePage = "home" | "dashboard" | "simulate" | "profile" | "admin";
+export type ActivePage = "home" | "get-started" | "dashboard" | "simulate" | "profile" | "admin";
 
 interface NavbarProps {
   activePage: ActivePage;
 }
 
-const NAV_LINKS: { href: string; label: string; page: ActivePage }[] = [
-  { href: "/", label: "Home", page: "home" },
-  { href: "/dashboard", label: "Dashboard", page: "dashboard" },
-  { href: "/simulate", label: "Simulator", page: "simulate" },
-  { href: "/profile", label: "Profile", page: "profile" },
-  { href: "/admin", label: "Admin View", page: "admin" },
-];
+const getNavLinks = (activePage: ActivePage): { href: string; label: string; page: ActivePage }[] => {
+  if (activePage === "home") return [];
+  if (activePage === "admin") return [{ href: "/admin", label: "Admin View", page: "admin" }];
+  if (activePage === "simulate") return [{ href: "/simulate", label: "Simulator", page: "simulate" }];
+  
+  return [
+    { href: "/dashboard", label: "Dashboard", page: "dashboard" },
+    { href: "/profile", label: "Profile", page: "profile" },
+  ];
+};
 
 export default function Navbar({ activePage }: NavbarProps) {
+  const currentLinks = getNavLinks(activePage);
   const { notifications, unreadCount, markAllRead, clearAll } = useNotifications();
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
@@ -54,7 +58,7 @@ export default function Navbar({ activePage }: NavbarProps) {
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Desktop Links */}
           <div className="hidden sm:flex items-center gap-2">
-            {NAV_LINKS.map((link) => {
+            {currentLinks.map((link) => {
               const isActive = activePage === link.page;
               return (
                 <Link
@@ -73,7 +77,7 @@ export default function Navbar({ activePage }: NavbarProps) {
 
           {/* Mobile Links (icons only) */}
           <div className="flex sm:hidden items-center gap-2">
-            {NAV_LINKS.map((link) => {
+            {currentLinks.map((link) => {
               const isActive = activePage === link.page;
               return (
                 <Link
