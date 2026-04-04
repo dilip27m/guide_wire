@@ -3,7 +3,7 @@ Parametric Insurance System — FastAPI Service
 ============================================================
 Architecture: FastAPI + PyTorch + Spacy (No LLM) + Actuarial Math
 Models: RiskModel (ST-GNN), ImpactModel (Deterministic), FraudModel (Residual MLP)
-Database: MongoDB (Mocked via get_partner_from_db)
+Database: MongoDB (Ready for frontend GPS pings & historical data)
 """
 
 import os
@@ -40,6 +40,8 @@ from torch_geometric.utils import from_networkx
 # database = db_client["insurance_db"]
 # partners_collection = database["delivery_partners"]
 # policies_collection = database["active_policies"]
+# history_collection = database["rider_history"] 
+# live_locations_collection = database["live_locations"] # <--- Tracks active GPS pings
 
 # ─────────────────────────────────────────────
 # CONFIG & API KEYS
@@ -68,8 +70,8 @@ FEATURE_NAMES = [
     "vehicle_age_yrs", "overinsurance_ratio", "num_policies_same_phone"
 ]
 
-# --- THE MOCK RIDER API (The Hardcoded Source of Truth for Oracle) ---
-MOCK_RIDER_API = {
+# --- FALLBACK RIDER DATA (Used if DB is empty or disconnected) ---
+FALLBACK_RIDER = {
     "rider_id": "USR_2026_99",
     "location_name": "MG Road Hub, Bangalore",
     "lat": 12.9716,
@@ -80,30 +82,60 @@ MOCK_RIDER_API = {
 # ─────────────────────────────────────────────
 # DATABASE MOCK FETCHER & FORECASTER
 # ─────────────────────────────────────────────
+def get_active_riders_from_db():
+    """Fetches all currently active riders and their latest GPS pings."""
+    try:
+        # --- TODO TEAMMATES: Swap for real DB call ---
+        # cursor = live_locations_collection.find({"status": "ACTIVE"})
+        # return list(cursor)
+        
+        # Simulate empty DB to trigger the fallback
+        return []
+    except Exception as e:
+        print(f"[Warning] DB Fetch Active Riders Failed: {e}")
+        return []
+
 def get_partner_from_db(worker_id: str) -> dict:
-    print(f"[Database] Fetching partner {worker_id} from MongoDB...")
+    """Fetches the delivery partner profile from MongoDB."""
+    print(f"[Database] Fetching profile for {worker_id} from MongoDB...")
     return {
         "partner_id": worker_id,
         "name": "Ravi Kumar", 
         "phone": "9876543210", 
-        "lat": MOCK_RIDER_API["lat"], 
-        "lon": MOCK_RIDER_API["lon"],
+        "lat": 12.9716, 
+        "lon": 77.5946,
         "city_name": "Bangalore", 
         "asset_value": 85000, 
         "coverage_tier": 2,
     }
 
-def get_weekly_forecast(csv_path="rider_history.csv"):
-    """Audits 52 weeks of data to forecast target earnings."""
+def get_weekly_forecast(worker_id: str):
+    """Audits up to 52 weeks of data from MongoDB to forecast target earnings."""
     try:
-        df = pd.read_csv(csv_path)
+        # --- TODO TEAMMATES: Swap mock list for real DB call ---
+        # cursor = history_collection.find({"rider_id": worker_id}).sort("week_end_date", 1)
+        # records = list(cursor)
+        
+        records = [
+            {"rider_id": worker_id, "week_number": 1, "earnings": 4100},
+            {"rider_id": worker_id, "week_number": 2, "earnings": 4350},
+            {"rider_id": worker_id, "week_number": 3, "earnings": 4000}
+        ]
+        if not records:
+            return 4200.0, 60.0  
+
+        df = pd.DataFrame(records)
         recent_trend = df['earnings'].tail(14).mean()
         yearly_avg = df['earnings'].mean()
+        
         forecasted_weekly = ((recent_trend * 0.7) + (yearly_avg * 0.3)) * 7
         hourly_rate = round(forecasted_weekly / 70, 2)
+        
         return round(forecasted_weekly, 2), hourly_rate
-    except Exception:
-        return 4200.0, 60.0  # Baseline fallback
+        
+    except Exception as e:
+        print(f"[Warning] DB Forecast Failed for {worker_id}: {e}")
+        return 4200.0, 60.0  
 
 # ─────────────────────────────────────────────
 # 1. DATA FETCHERS
@@ -306,51 +338,59 @@ latest_payout = None
 # FASTAPI LIFESPAN & BACKGROUND ORACLE
 # ─────────────────────────────────────────────
 async def monitoring_oracle():
-    """Background task polling environment to trigger parametric claims."""
+    """Background task polling environment to trigger parametric claims for active riders."""
     global active_event, latest_payout
     while True:
         try:
-            # Poll Sensors Non-Blocking
-            lat, lon, city = MOCK_RIDER_API['lat'], MOCK_RIDER_API['lon'], "Bangalore"
-            rain_task = asyncio.to_thread(fetch_imd_alert, lat, lon)
-            news_task = asyncio.to_thread(fetch_news_events, city)
-            
-            _, rain_mm, _ = await rain_task
-            news_snippets = await news_task
-            road_events = extract_events_fast(news_snippets)
-            
-            # Parametric Threshold Logic
-            is_hazard = (rain_mm > RAIN_THRESHOLD_MM) or len(road_events) > 0
+            # 1. Fetch live riders from DB (or fallback)
+            active_riders = get_active_riders_from_db()
+            if not active_riders:
+                active_riders = [FALLBACK_RIDER]
 
-            if is_hazard and not active_event:
-                active_event = {"id": f"DIS_{uuid.uuid4().hex[:4].upper()}", "start_time": time.time(), "rain": rain_mm}
-                print(f"🚨 ALERT: Parametric Disruption detected for {MOCK_RIDER_API['rider_id']}.")
-
-            elif not is_hazard and active_event:
-                # Event ended - Process Settlement
-                forecast, hourly_rate = get_weekly_forecast()
-                duration_hrs = max((time.time() - active_event["start_time"]) / 3600, 1.3)
+            # 2. Monitor triggers for each active rider's location
+            for rider in active_riders:
+                lat, lon = rider['lat'], rider['lon']
+                city = rider.get('location_name', 'Bangalore').split(',')[-1].strip()
                 
-                # Impact Model dictates the parametric multiplier
-                impact = ImpactModel().evaluate({"rainfall_mm": active_event["rain"]}, RAIN_THRESHOLD_MM, 85000)
-                payout = impact.get("payout_amount", round(hourly_rate * duration_hrs, 2))
+                rain_task = asyncio.to_thread(fetch_imd_alert, lat, lon)
+                news_task = asyncio.to_thread(fetch_news_events, city)
+                
+                _, rain_mm, _ = await rain_task
+                news_snippets = await news_task
+                road_events = extract_events_fast(news_snippets)
+                
+                # Parametric Threshold Logic
+                is_hazard = (rain_mm > RAIN_THRESHOLD_MM) or len(road_events) > 0
 
-                latest_payout = {
-                    "rider_id": MOCK_RIDER_API["rider_id"],
-                    "disruption_id": active_event["id"],
-                    "payout_amount": payout,
-                    "forecasted_weekly_income": forecast,
-                    "duration": round(duration_hrs, 2),
-                    "location": MOCK_RIDER_API["location_name"],
-                    "settled_at": datetime.now().strftime("%H:%M:%S")
-                }
-                active_event = None
-                print(f"✅ SETTLEMENT: Parametric Payout processed for {MOCK_RIDER_API['rider_id']}.")
+                if is_hazard and not active_event:
+                    active_event = {"id": f"DIS_{uuid.uuid4().hex[:4].upper()}", "start_time": time.time(), "rain": rain_mm}
+                    print(f"🚨 ALERT: Parametric Disruption detected for {rider['rider_id']} in {city}.")
+
+                elif not is_hazard and active_event:
+                    # Event ended - Process Settlement
+                    forecast, hourly_rate = get_weekly_forecast(rider["rider_id"])
+                    duration_hrs = max((time.time() - active_event["start_time"]) / 3600, 1.3)
+                    
+                    # Impact Model dictates the parametric multiplier
+                    impact = ImpactModel().evaluate({"rainfall_mm": active_event["rain"]}, RAIN_THRESHOLD_MM, 85000)
+                    payout = impact.get("payout_amount", round(hourly_rate * duration_hrs, 2))
+
+                    latest_payout = {
+                        "rider_id": rider["rider_id"],
+                        "disruption_id": active_event["id"],
+                        "payout_amount": payout,
+                        "forecasted_weekly_income": forecast,
+                        "duration": round(duration_hrs, 2),
+                        "location": rider["location_name"],
+                        "settled_at": datetime.now().strftime("%H:%M:%S")
+                    }
+                    active_event = None
+                    print(f"✅ SETTLEMENT: Parametric Payout processed for {rider['rider_id']}.")
 
         except Exception as e:
             print(f"Oracle Error: {e}")
             
-        await asyncio.sleep(60) # Poll every 60s in production
+        await asyncio.sleep(60) # Poll every 60s
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -364,6 +404,12 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # ─────────────────────────────────────────────
 # PYDANTIC SCHEMAS
 # ─────────────────────────────────────────────
+class LocationPingRequest(BaseModel):
+    worker_id: str
+    lat: float
+    lon: float
+    location_name: Optional[str] = "Unknown"
+
 class PremiumRequest(BaseModel):
     worker_id: str
 
@@ -386,6 +432,25 @@ class SettleWeekRequest(BaseModel):
 # FASTAPI ENDPOINTS
 # ─────────────────────────────────────────────
 
+@app.post("/ping-location")
+async def post_ping_location(req: LocationPingRequest):
+    """POST /ping-location — Frontend app calls this periodically to update live GPS."""
+    # --- TODO TEAMMATES: Update MongoDB ---
+    # live_locations_collection.update_one(
+    #     {"rider_id": req.worker_id},
+    #     {
+    #         "$set": {
+    #             "lat": req.lat, 
+    #             "lon": req.lon, 
+    #             "location_name": req.location_name, 
+    #             "status": "ACTIVE", 
+    #             "last_ping": datetime.now().isoformat()
+    #         }
+    #     },
+    #     upsert=True
+    # )
+    return {"status": "success", "message": f"GPS location logged for {req.worker_id}"}
+
 @app.post("/get-premium")
 async def post_get_premium(req: PremiumRequest):
     """POST /get-premium — Calculates Actuarial Premium using ST-GNN."""
@@ -406,7 +471,7 @@ async def post_get_premium(req: PremiumRequest):
         risk_score = risk_model(weather_norm, city_graph, env).item()
 
     # Actuarial Weekly Pricing Model (Formula Integration & Constraints)
-    forecast, hourly = get_weekly_forecast()
+    forecast, hourly = get_weekly_forecast(req.worker_id)
     avg_income_lost = forecast / 7.0
     
     BASE_PROB_SCALER = 0.012  # Actuarial scaler mapping AI risk -> real world daily probability
@@ -439,7 +504,7 @@ async def post_get_payout(req: PayoutRequest):
         payout_amount = latest_payout["payout_amount"]
     else:
         # Fallback to manual duration calculation if no parametric event triggered
-        _, default_hourly = get_weekly_forecast()
+        _, default_hourly = get_weekly_forecast(req.worker_id)
         hourly = req.hourly_rate if req.hourly_rate else default_hourly
         payout_amount = round(hourly * max(req.duration_hrs, 0.5), 2)
 
