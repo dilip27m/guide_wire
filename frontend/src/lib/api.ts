@@ -72,6 +72,10 @@ export async function fetchPremium(data: PremiumRequest): Promise<PremiumRespons
   return apiRequest<PremiumResponse>("/api/premium", {
     body: {
       worker_id: data.worker_id,
+      name: data.name,
+      phone: data.phone,
+      city: data.city,
+      delivery_platform: data.delivery_platform,
     },
   });
 }

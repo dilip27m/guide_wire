@@ -70,6 +70,20 @@ FEATURE_NAMES = [
     "vehicle_age_yrs", "overinsurance_ratio", "num_policies_same_phone"
 ]
 
+# --- CITY COORDINATES FOR MULTI-CITY SUPPORT ---
+CITY_COORDS = {
+    "Bangalore": {"lat": 12.9716, "lon": 77.5946},
+    "Mumbai":    {"lat": 19.0760, "lon": 72.8777},
+    "Delhi":     {"lat": 28.6139, "lon": 77.2090},
+    "Hyderabad": {"lat": 17.3850, "lon": 78.4867},
+    "Chennai":   {"lat": 13.0827, "lon": 80.2707},
+    "Pune":      {"lat": 18.5204, "lon": 73.8567},
+    "Kolkata":   {"lat": 22.5726, "lon": 88.3639},
+    "Ahmedabad": {"lat": 23.0225, "lon": 72.5714},
+    "Jaipur":    {"lat": 26.9124, "lon": 75.7873},
+    "Lucknow":   {"lat": 26.8467, "lon": 80.9462},
+}
+
 # --- FALLBACK RIDER DATA (Used if DB is empty or disconnected) ---
 FALLBACK_RIDER = {
     "rider_id": "USR_2026_99",
@@ -352,11 +366,17 @@ async def monitoring_oracle():
                 lat, lon = rider['lat'], rider['lon']
                 city = rider.get('location_name', 'Bangalore').split(',')[-1].strip()
                 
-                rain_task = asyncio.to_thread(fetch_imd_alert, lat, lon)
-                news_task = asyncio.to_thread(fetch_news_events, city)
+                # Use asyncio.gather to run in parallel and avoid un-awaited coroutines if one fails
+                rain_future = asyncio.to_thread(fetch_imd_alert, lat, lon)
+                news_future = asyncio.to_thread(fetch_news_events, city)
                 
-                _, rain_mm, _ = await rain_task
-                news_snippets = await news_task
+                try:
+                    rain_result, news_snippets = await asyncio.gather(rain_future, news_future)
+                    _, rain_mm, _ = rain_result
+                except Exception as e:
+                    print(f"Oracle API Fetch Error for {city}: {e}")
+                    continue # Skip this rider's parametric check this minute
+                
                 road_events = extract_events_fast(news_snippets)
                 
                 # Parametric Threshold Logic
@@ -412,6 +432,7 @@ class LocationPingRequest(BaseModel):
 
 class PremiumRequest(BaseModel):
     worker_id: str
+    city: Optional[str] = "Bangalore"
 
 class PayoutRequest(BaseModel):
     disruption_id: str
@@ -455,7 +476,11 @@ async def post_ping_location(req: LocationPingRequest):
 async def post_get_premium(req: PremiumRequest):
     """POST /get-premium — Calculates Actuarial Premium using ST-GNN."""
     partner = get_partner_from_db(req.worker_id)
-    lat, lon = partner["lat"], partner["lon"]
+    
+    # Use city from request for multi-city support
+    city_name = req.city or "Bangalore"
+    coords = CITY_COORDS.get(city_name, CITY_COORDS["Bangalore"])
+    lat, lon = coords["lat"], coords["lon"]
     
     # Run heavy ops in thread pool
     weather_arr = await asyncio.to_thread(fetch_weather_history, lat, lon)
@@ -481,7 +506,9 @@ async def post_get_premium(req: PremiumRequest):
     tier_mult = {1: 0.8, 2: 1.0, 3: 1.3}[partner["coverage_tier"]]
     
     raw_weekly_premium = daily_trigger_prob * avg_income_lost * days_exposed * tier_mult
-    premium_weekly = max(20.0, min(raw_weekly_premium, 50.0)) # Strict business rule constraint
+    
+    # Smooth asymptotic mapping between 20 and 50 using tanh
+    premium_weekly = 20.0 + 30.0 * math.tanh(raw_weekly_premium / 100.0)
 
     return {
         "status": "ok",
@@ -506,7 +533,18 @@ async def post_get_payout(req: PayoutRequest):
         # Fallback to manual duration calculation if no parametric event triggered
         _, default_hourly = get_weekly_forecast(req.worker_id)
         hourly = req.hourly_rate if req.hourly_rate else default_hourly
-        payout_amount = round(hourly * max(req.duration_hrs, 0.5), 2)
+        
+        # Normalize payout: Map assumed raw risk using the same tanh function to find the scale-down ratio
+        avg_income_lost = req.forecasted_income / 7.0
+        daily_trigger_prob_avg = 0.45 * 0.012 # Generic risk estimation without running heavy GNN
+        raw_weekly_premium = daily_trigger_prob_avg * avg_income_lost * 6 * 1.0
+        
+        coverage_ratio = 1.0
+        if raw_weekly_premium > 0:
+            smooth_premium = 20.0 + 30.0 * math.tanh(raw_weekly_premium / 100.0)
+            coverage_ratio = smooth_premium / raw_weekly_premium
+            
+        payout_amount = round(hourly * max(req.duration_hrs, 0.5) * coverage_ratio, 2)
 
     # Validate with FraudModel (Residual MLP)
     claim_features = {
@@ -564,6 +602,46 @@ async def settle_week(req: SettleWeekRequest):
         "settled_at": datetime.now().isoformat(),
         "message": f"₹{round(req.total_amount, 2):.2f} has been transferred to your account."
     }
+
+@app.get("/admin/forecast-risk")
+async def get_admin_forecast_risk():
+    """GET /admin/forecast-risk — Predicts risk for major cities for the upcoming week."""
+    cities_to_check = ["Bangalore", "Mumbai", "Delhi", "Chennai"]
+    results = []
+    
+    for city in cities_to_check:
+        coords = CITY_COORDS[city]
+        lat, lon = coords["lat"], coords["lon"]
+        try:
+            # fetch_imd_alert returns (temp_c, rain_mm, wind_kph) based on 1-day or 7-day forecast depending on implementation
+            _, rain_mm, _ = await asyncio.to_thread(fetch_imd_alert, lat, lon)
+            
+            # Simple Admin heuristic for the portfolio dashboard
+            if rain_mm > 40.0:
+                risk_level = "HIGH"
+                reason = "Heavy Rainfall Expected"
+            elif rain_mm > 15.0:
+                risk_level = "MEDIUM"
+                reason = "Moderate Rainfall"
+            else:
+                risk_level = "LOW"
+                reason = "Clear/Normal"
+                
+            results.append({
+                "city": city,
+                "risk_level": risk_level,
+                "reason": reason,
+                "rain_mm": round(rain_mm, 1)
+            })
+        except Exception as e:
+            results.append({
+                "city": city,
+                "risk_level": "UNKNOWN",
+                "reason": f"Forecast API Error",
+                "rain_mm": 0.0
+            })
+            
+    return {"status": "ok", "forecasts": results}
 
 @app.get("/cron")
 @app.head("/cron")

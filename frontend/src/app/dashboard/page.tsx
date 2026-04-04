@@ -146,13 +146,14 @@ export default function DashboardPage() {
           data={premiumData}
           workerId={workerData.worker_id}
           platform={workerData.delivery_platform || "Swiggy/Zomato"}
+          payouts={dbData?.payouts || []}
         />
 
         {/* 3. History & Demo Controls (Split Layout) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
-          {/* Left/Main Column: Payment History (Spans 8 cols strongly) */}
-          <div className="lg:col-span-8 h-[600px] flex flex-col">
+          {/* Full Width Column: Payment & Payout History */}
+          <div className="lg:col-span-12 h-[600px] flex flex-col">
             {dbLoading ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-white border-4 border-slate-900 rounded-2xl shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] gap-4">
                 <Spinner size="lg" />
@@ -166,52 +167,6 @@ export default function DashboardPage() {
                 payouts={dbData?.payouts || []}
               />
             )}
-          </div>
-
-          {/* Right Column: Demo Controls (Spans 4 cols) */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="bg-white border-4 border-slate-900 rounded-2xl p-6 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)]">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 border-2 border-slate-900 flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-                  <span className="text-xl">🎤</span>
-                </div>
-                <h2 className="font-black text-2xl uppercase tracking-tighter text-slate-900">Board Demo</h2>
-              </div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-8 ml-13 line-clamp-3">
-                Simulate a week's end to automatically settle all pending payouts.
-              </p>
-
-              <button
-                onClick={handleSettleWeek}
-                disabled={settling}
-                className="w-full flex flex-col items-center justify-center gap-2 py-5 px-6 rounded-xl font-black uppercase text-slate-900 bg-[#fde047] border-4 border-slate-900 shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] active:translate-y-1 active:shadow-none transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:translate-y-0 disabled:shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]"
-              >
-                {settling ? (
-                  <>
-                    <Spinner size="sm" className="text-slate-900 mb-1" />
-                    <span className="tracking-widest">Settling...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-3xl mb-1">📆</span>
-                    <span className="tracking-widest text-sm text-center">End Week & Pay</span>
-                  </>
-                )}
-              </button>
-
-              {/* Inline feedback toast */}
-              {settlementMsg && (
-                <div className={`mt-6 flex items-start gap-4 p-5 border-4 border-slate-900 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] animate-in fade-in slide-in-from-bottom-4 duration-300 ${settlementMsg.type === "success" ? "bg-green-100" :
-                    settlementMsg.type === "info" ? "bg-blue-50" :
-                      "bg-red-100"
-                  }`}>
-                  <span className="text-2xl shrink-0 mt-0.5">
-                    {settlementMsg.type === "success" ? "✅" : settlementMsg.type === "info" ? "ℹ️" : "❌"}
-                  </span>
-                  <p className="font-black text-sm text-slate-900 tracking-tight leading-snug">{settlementMsg.text}</p>
-                </div>
-              )}
-            </div>
           </div>
         </div>
 

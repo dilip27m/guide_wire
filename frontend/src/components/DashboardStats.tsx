@@ -1,12 +1,21 @@
-import { PremiumResponse } from "@/lib/types";
+import { PremiumResponse, IPayoutData } from "@/lib/types";
 
 interface DashboardStatsProps {
   data: PremiumResponse;
   workerId: string;
   platform: string;
+  payouts?: IPayoutData[];
 }
 
-export default function DashboardStats({ data, workerId, platform }: DashboardStatsProps) {
+export default function DashboardStats({ data, workerId, platform, payouts = [] }: DashboardStatsProps) {
+  const totalProtected = payouts.reduce((sum, p) => sum + p.amount, 0);
+  const claimsThisWeek = payouts.filter((p) => {
+    const d = new Date(p.timestamp);
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return d >= weekAgo;
+  }).length;
+
   const stats = [
     {
       label: "Weekly Income Forecast",
@@ -21,6 +30,20 @@ export default function DashboardStats({ data, workerId, platform }: DashboardSt
       sub: "Auto-deducted",
       icon: "🛡️",
       color: "bg-blue-200",
+    },
+    {
+      label: "Earnings Protected",
+      value: `₹${totalProtected.toFixed(0)}`,
+      sub: `${payouts.length} total claim${payouts.length !== 1 ? "s" : ""}`,
+      icon: "💸",
+      color: "bg-green-200",
+    },
+    {
+      label: "Claims This Week",
+      value: `${claimsThisWeek}`,
+      sub: claimsThisWeek > 0 ? "Active coverage used" : "No disruptions",
+      icon: "📊",
+      color: "bg-purple-200",
     },
   ];
 
@@ -45,8 +68,8 @@ export default function DashboardStats({ data, workerId, platform }: DashboardSt
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {stats.map((stat, idx) => (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {stats.map((stat) => (
           <div
             key={stat.label}
             className={`relative overflow-hidden ${stat.color} border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] transition-all hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_rgba(15,23,42,1)]`}
@@ -54,13 +77,13 @@ export default function DashboardStats({ data, workerId, platform }: DashboardSt
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[10px] sm:text-xs font-black mb-1 uppercase tracking-widest text-slate-900">{stat.label}</p>
-                <p className="font-black text-slate-900 tracking-tighter text-3xl sm:text-4xl">
+                <p className="font-black text-slate-900 tracking-tighter text-2xl sm:text-3xl">
                   {stat.value}
                 </p>
                 <p className="text-[10px] mt-1 uppercase tracking-widest font-bold text-slate-700">{stat.sub}</p>
               </div>
-              <div className="w-12 h-12 rounded-lg border-2 border-slate-900 bg-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] shrink-0">
-                <span className="text-2xl">{stat.icon}</span>
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg border-2 border-slate-900 bg-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] shrink-0">
+                <span className="text-xl sm:text-2xl">{stat.icon}</span>
               </div>
             </div>
           </div>

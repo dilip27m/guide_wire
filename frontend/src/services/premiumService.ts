@@ -5,6 +5,10 @@ import { aiService, AiServiceError } from "@/services/aiService";
 
 export interface CreatePremiumInput {
   worker_id: string;
+  name: string;
+  phone: string;
+  city: string;
+  delivery_platform: string;
 }
 
 export const premiumService = {
@@ -25,10 +29,10 @@ export const premiumService = {
       console.error("[premiumService] DB check error:", e);
     }
 
-    // 1. Call AI Service
+    // 1. Call AI Service (pass city for location-aware risk)
     let aiData;
     try {
-      aiData = await aiService.getPremium(input.worker_id);
+      aiData = await aiService.getPremium(input.worker_id, input.city);
     } catch (error) {
       if (error instanceof AiServiceError) {
         throw error;
@@ -40,13 +44,16 @@ export const premiumService = {
     try {
       await connectDB();
 
-      // Upsert Worker
+      // Upsert Worker with full profile
       await Worker.findOneAndUpdate(
         { worker_id: input.worker_id },
         {
           worker_id: input.worker_id,
-          platform: aiData.platform,
-          city: aiData.city,
+          name: input.name,
+          phone: input.phone,
+          platform: input.delivery_platform,
+          delivery_platform: input.delivery_platform,
+          city: input.city,
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -54,6 +61,8 @@ export const premiumService = {
       return {
         ...aiData,
         worker_id: input.worker_id,
+        city: input.city,
+        platform: input.delivery_platform,
         already_active: !!recentPolicy,
         policy_id: recentPolicy ? recentPolicy.policy_id : undefined,
       };

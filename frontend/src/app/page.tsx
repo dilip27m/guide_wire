@@ -64,6 +64,8 @@ export default function HomePage() {
       const sessionPremium = {
         ...premiumData,
         policy_id: response.policy_id,
+        city: workerData.city,
+        platform: workerData.delivery_platform,
       };
       
       saveSessionData(sessionPremium, workerData);

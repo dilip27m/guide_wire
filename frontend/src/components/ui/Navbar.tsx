@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useNotifications } from "@/hooks/useNotifications";
 
-export type ActivePage = "home" | "dashboard" | "simulate";
+export type ActivePage = "home" | "dashboard" | "simulate" | "profile" | "admin";
 
 interface NavbarProps {
   activePage: ActivePage;
@@ -14,6 +14,8 @@ const NAV_LINKS: { href: string; label: string; page: ActivePage }[] = [
   { href: "/",          label: "Home",      page: "home"      },
   { href: "/dashboard", label: "Dashboard", page: "dashboard" },
   { href: "/simulate",  label: "Simulator", page: "simulate"  },
+  { href: "/profile",   label: "Profile",   page: "profile"   },
+  { href: "/admin",     label: "Admin View",page: "admin"     },
 ];
 
 export default function Navbar({ activePage }: NavbarProps) {

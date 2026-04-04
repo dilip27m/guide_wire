@@ -12,6 +12,10 @@ export async function POST(req: NextRequest) {
   try {
     const responseData = await premiumService.processPremium({
       worker_id: body.worker_id,
+      name: body.name || "",
+      phone: body.phone || "",
+      city: body.city || "Bangalore",
+      delivery_platform: body.delivery_platform || "Swiggy",
     });
     return NextResponse.json(responseData);
   } catch (error) {

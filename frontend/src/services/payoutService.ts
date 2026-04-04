@@ -24,6 +24,17 @@ export const payoutService = {
     try {
       await connectDB();
 
+      // Duplicate claim prevention
+      const existingPayout = await Payout.findOne({ disruption_id: body.disruption_id });
+      if (existingPayout) {
+        return {
+          ...aiData,
+          duplicate: true,
+          message: "A payout for this disruption has already been processed.",
+          existing_payout_id: existingPayout.payout_id,
+        };
+      }
+
       // Create disruption record
       await Disruption.create({
         disruption_id: body.disruption_id,
@@ -40,7 +51,7 @@ export const payoutService = {
         worker_id: body.worker_id || "unknown",
         disruption_id: body.disruption_id,
         amount: aiData.payout_amount,
-        status: "simulated",
+        status: "completed", // Instant payout
       });
 
       return {

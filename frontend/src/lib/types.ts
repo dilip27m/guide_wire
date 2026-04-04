@@ -2,6 +2,10 @@
 
 export interface PremiumRequest {
   worker_id: string;
+  name: string;
+  phone: string;
+  city: string;
+  delivery_platform: string;
 }
 
 export interface PayoutRequest {
@@ -32,6 +36,8 @@ export interface PremiumResponse {
   premium_to_collect: number;
   hourly_rate: number;
   ambient_temp: number;
+  platform?: string;
+  city?: string;
   worker_id?: string;
   policy_id?: string;
   already_active?: boolean;
@@ -50,8 +56,10 @@ export interface PayoutResponse {
 
 export interface WorkerData {
   worker_id: string;
-  city?: string;
-  delivery_platform?: string;
+  name: string;
+  phone: string;
+  city: string;
+  delivery_platform: string;
 }
 
 export type DisruptionType = "heavy_rain" | "heatwave" | "strike" | "pollution";
