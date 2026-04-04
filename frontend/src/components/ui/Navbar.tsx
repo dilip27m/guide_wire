@@ -11,11 +11,11 @@ interface NavbarProps {
 }
 
 const NAV_LINKS: { href: string; label: string; page: ActivePage }[] = [
-  { href: "/",          label: "Home",      page: "home"      },
+  { href: "/", label: "Home", page: "home" },
   { href: "/dashboard", label: "Dashboard", page: "dashboard" },
-  { href: "/simulate",  label: "Simulator", page: "simulate"  },
-  { href: "/profile",   label: "Profile",   page: "profile"   },
-  { href: "/admin",     label: "Admin View",page: "admin"     },
+  { href: "/simulate", label: "Simulator", page: "simulate" },
+  { href: "/profile", label: "Profile", page: "profile" },
+  { href: "/admin", label: "Admin View", page: "admin" },
 ];
 
 export default function Navbar({ activePage }: NavbarProps) {
@@ -60,11 +60,10 @@ export default function Navbar({ activePage }: NavbarProps) {
                 <Link
                   key={link.page}
                   href={link.href}
-                  className={`relative px-5 py-2 text-sm font-black uppercase tracking-wider border-2 border-slate-900 rounded-lg transition-all ${
-                    isActive
+                  className={`relative px-5 py-2 text-sm font-black uppercase tracking-wider border-2 border-slate-900 rounded-lg transition-all ${isActive
                       ? "text-white bg-slate-900"
                       : "text-slate-900 bg-white hover:-translate-y-1 hover:shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] active:translate-y-0 active:shadow-none"
-                  }`}
+                    }`}
                 >
                   {link.label}
                 </Link>
@@ -80,11 +79,10 @@ export default function Navbar({ activePage }: NavbarProps) {
                 <Link
                   key={link.page}
                   href={link.href}
-                  className={`w-10 h-10 flex items-center justify-center rounded-lg border-2 border-slate-900 font-black text-lg transition-all ${
-                    isActive
+                  className={`w-10 h-10 flex items-center justify-center rounded-lg border-2 border-slate-900 font-black text-lg transition-all ${isActive
                       ? "text-white bg-slate-900"
                       : "text-slate-900 bg-white hover:-translate-y-0.5 hover:shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] active:translate-y-0 active:shadow-none"
-                  }`}
+                    }`}
                 >
                   {link.label.charAt(0)}
                 </Link>
