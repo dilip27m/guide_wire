@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useNotifications } from "@/hooks/useNotifications";
+import { clearSessionData } from "@/hooks/useSessionData";
 
 export type ActivePage = "home" | "get-started" | "dashboard" | "simulate" | "profile" | "admin";
 
@@ -22,10 +24,16 @@ const getNavLinks = (activePage: ActivePage): { href: string; label: string; pag
 };
 
 export default function Navbar({ activePage }: NavbarProps) {
+  const router = useRouter();
   const currentLinks = getNavLinks(activePage);
   const { notifications, unreadCount, markAllRead, clearAll } = useNotifications();
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = () => {
+    clearSessionData();
+    router.push("/");
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -112,7 +120,7 @@ export default function Navbar({ activePage }: NavbarProps) {
                 </span>
               )}
             </button>
-
+            
             {/* Dropdown */}
             {bellOpen && (
               <div className="absolute right-0 top-14 w-80 sm:w-96 bg-white border-4 border-slate-900 rounded-xl shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] z-[100] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200">
@@ -168,6 +176,19 @@ export default function Navbar({ activePage }: NavbarProps) {
               </div>
             )}
           </div>
+
+          {/* Logout Button (Only for Rider facing views) */}
+          {activePage === "dashboard" || activePage === "profile" ? (
+            <button
+              onClick={handleLogout}
+              className="relative w-10 h-10 flex items-center justify-center rounded-lg border-2 border-slate-900 bg-red-100 text-red-600 hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] active:translate-y-0 active:shadow-none transition-all ml-1 sm:ml-2"
+              title="Logout"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          ) : null}
         </div>
       </nav>
     </div>

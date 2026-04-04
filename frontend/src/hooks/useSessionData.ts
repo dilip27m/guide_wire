@@ -48,3 +48,12 @@ export function saveSessionData(
   sessionStorage.setItem("workerData", JSON.stringify(workerData));
   sessionStorage.setItem("worker_id", workerData.worker_id);
 }
+
+/**
+ * Removes session data allowing for a clean logout state.
+ */
+export function clearSessionData(): void {
+  sessionStorage.removeItem("premiumData");
+  sessionStorage.removeItem("workerData");
+  sessionStorage.removeItem("worker_id");
+}

@@ -1,19 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { DisruptionScenario, PayoutResponse } from "@/lib/types";
+import { DisruptionScenario, MassPayoutResponse } from "@/lib/types";
 import { SCENARIOS } from "@/lib/constants";
-import { fetchPayout } from "@/lib/api";
+import { fetchMassPayout } from "@/lib/api";
 import Spinner from "@/components/ui/Spinner";
 import ErrorAlert from "@/components/ui/ErrorAlert";
-
-interface SimulationControlsProps {
-  forecastedIncome: number;
-  hourlyRate: number;
-  ambientTemp: number;
-  workerId: string;
-  city: string;
-}
 
 const SCENARIO_COLORS = [
   "bg-blue-200",
@@ -24,18 +16,15 @@ const SCENARIO_COLORS = [
   "bg-green-200",
 ];
 
-export default function SimulationControls({
-  forecastedIncome,
-  hourlyRate,
-  ambientTemp,
-  workerId,
-  city,
-}: SimulationControlsProps) {
+const CITIES = ["Bangalore", "Mumbai", "Delhi", "Chennai", "Hyderabad", "Pune", "Kolkata"];
+
+export default function SimulationControls() {
   const [loading, setLoading] = useState<string | null>(null);
-  const [result, setResult] = useState<PayoutResponse | null>(null);
+  const [result, setResult] = useState<MassPayoutResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeScenario, setActiveScenario] = useState<DisruptionScenario | null>(null);
   const [customDuration, setCustomDuration] = useState<number>(2);
+  const [selectedCity, setSelectedCity] = useState<string>(CITIES[0]);
 
   const handleSimulate = async (scenario: DisruptionScenario) => {
     setLoading(scenario.type);
@@ -44,20 +33,15 @@ export default function SimulationControls({
     setActiveScenario(scenario);
 
     try {
-      const res = await fetchPayout({
-        disruption_id: `${scenario.type}_${Date.now()}`,
+      const res = await fetchMassPayout({
+        city: selectedCity,
         disruption_type: scenario.type,
         duration_hrs: customDuration,
         cargo_type: scenario.cargo_type,
-        forecasted_income: forecastedIncome,
-        hourly_rate: hourlyRate,
-        ambient_temp: scenario.ambient_temp || ambientTemp,
-        worker_id: workerId,
-        city: city,
       });
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Simulation failed");
+      setError(err instanceof Error ? err.message : "Mass Simulation failed");
     } finally {
       setLoading(null);
     }
@@ -65,24 +49,47 @@ export default function SimulationControls({
 
   return (
     <div className="space-y-6">
-      {/* Judges Controls: Duration Slider */}
-      <div className="bg-white border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-        <label className="flex justify-between items-center mb-4">
-          <span className="font-black uppercase tracking-widest text-slate-900 text-sm">Disruption Duration</span>
-          <span className="font-black text-xl text-red-600 bg-red-100 px-3 py-1 rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">{customDuration} <span className="text-sm">hrs</span></span>
-        </label>
-        <input 
-          type="range" 
-          min="1" 
-          max="24" 
-          step="1"
-          value={customDuration}
-          onChange={(e) => setCustomDuration(Number(e.target.value))}
-          className="w-full h-4 bg-slate-200 rounded-lg appearance-none cursor-pointer border-2 border-slate-900 accent-red-600"
-        />
-        <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">
-          <span>1 Hour</span>
-          <span>Day Long (24hrs)</span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* City Selector */}
+        <div className="bg-white border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+          <label className="block font-black uppercase tracking-widest text-slate-900 text-sm mb-3">
+            Target Operation City
+          </label>
+          <select
+            value={selectedCity}
+            onChange={(e) => {
+              setSelectedCity(e.target.value);
+              setResult(null);
+            }}
+            className="w-full h-12 px-4 bg-slate-100 border-2 border-slate-900 rounded-lg text-lg font-black text-slate-900 uppercase tracking-tighter shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] appearance-none cursor-pointer focus:outline-none focus:ring-4 focus:ring-red-200 transition-all"
+          >
+            {CITIES.map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Judges Controls: Duration Slider */}
+        <div className="bg-white border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+          <label className="flex justify-between items-center mb-4">
+            <span className="font-black uppercase tracking-widest text-slate-900 text-sm">Disruption Duration</span>
+            <span className="font-black text-xl text-red-600 bg-red-100 px-3 py-1 rounded-lg border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">{customDuration} <span className="text-sm">hrs</span></span>
+          </label>
+          <input 
+            type="range" 
+            min="1" 
+            max="24" 
+            step="1"
+            value={customDuration}
+            onChange={(e) => setCustomDuration(Number(e.target.value))}
+            className="w-full h-4 bg-slate-200 rounded-lg appearance-none cursor-pointer border-2 border-slate-900 accent-red-600"
+          />
+          <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-3">
+            <span>1 Hour</span>
+            <span>Day Long (24hrs)</span>
+          </div>
         </div>
       </div>
 
@@ -121,7 +128,7 @@ export default function SimulationControls({
                 <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-20">
                   <div className="flex flex-col items-center gap-2">
                     <Spinner size="lg" className="text-slate-900" />
-                    <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Simulating...</span>
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Simulating Mass Event...</span>
                   </div>
                 </div>
               )}
@@ -130,15 +137,10 @@ export default function SimulationControls({
         })}
       </div>
 
-      {/* Judges Disclaimer */}
-      <p className="text-center font-bold text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed px-4 opacity-80">
-        Judge Notice: If you receive a timeout error, the cloud AI engine is currently waking up from sleep mode. Please wait 1 minute and try again.
-      </p>
-
       {/* Error */}
       {error && <ErrorAlert message={error} />}
 
-      {/* Result */}
+      {/* Details/Logs View */}
       {result && activeScenario && (
         <div
           className="relative overflow-hidden bg-[#fde047] border-4 border-slate-900 rounded-xl p-6 sm:p-8 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] animate-in fade-in slide-in-from-bottom-8 duration-700 mt-8"
@@ -149,35 +151,34 @@ export default function SimulationControls({
                <span className="text-3xl">{activeScenario.icon}</span>
             </div>
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-2 rounded-none text-[10px] font-black uppercase tracking-widest bg-green-400 text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-                <span className="w-2 h-2 bg-green-700 animate-pulse" />
-                Claim Approved
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-2 rounded-none text-[10px] font-black uppercase tracking-widest bg-red-400 text-white border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+                <span className="w-2 h-2 bg-red-100 rounded-full animate-pulse" />
+                Global Impact Triggered
               </div>
-              <h4 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{activeScenario.label} Triggered</h4>
+              <h4 className="text-2xl font-black text-slate-900 tracking-tighter uppercase">{selectedCity} • {activeScenario.label}</h4>
               <p className="text-xs text-slate-600 font-bold font-mono mt-1">ID: {result.disruption_id}</p>
             </div>
           </div>
 
-          <div className="relative z-10 grid grid-cols-2 gap-3 sm:gap-4 mb-6">
-            <div className="col-span-2 relative overflow-hidden bg-white border-4 border-slate-900 rounded-xl p-5 sm:p-6 mb-2 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
-              <p className="text-sm font-black uppercase tracking-widest text-slate-900 mb-2">Instant Payout</p>
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div className="relative overflow-hidden bg-white border-4 border-slate-900 rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+              <p className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Riders Affected</p>
+              <div className="flex items-center gap-3">
+                 <span className="text-3xl font-black text-slate-900">{result.affected_riders}</span>
+                 <span className="px-2 py-0.5 bg-green-200 border-2 border-slate-900 text-[10px] font-black rounded-full uppercase tracking-widest">Credited</span>
+              </div>
+            </div>
+
+            <div className="relative overflow-hidden bg-red-100 border-4 border-slate-900 rounded-xl p-5 sm:p-6 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
+              <p className="text-sm font-black uppercase tracking-widest text-slate-900 mb-2">Total Service Paid</p>
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-black text-slate-400">₹</span>
                 <p className="text-5xl sm:text-6xl font-black text-slate-900 tracking-tighter">
-                  {result.payout_amount.toFixed(2)}
+                  {result.total_payout_amount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                 </p>
               </div>
             </div>
-            
-
           </div>
-
-          {result.payout_id && (
-            <div className="relative z-10 flex items-center gap-2 p-3 bg-white border-2 border-slate-900 rounded-lg shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-              <span className="text-slate-900 font-black">✓</span>
-              <p className="text-xs text-slate-700 font-bold uppercase tracking-wide">Saved to Records • ID: <span className="font-mono text-slate-900">{result.payout_id}</span></p>
-            </div>
-          )}
         </div>
       )}
     </div>

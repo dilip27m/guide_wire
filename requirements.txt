@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+pydantic
+requests
+spacy
+numpy
+pandas
+osmnx
+networkx
+torch
+torch_geometric
+pymongo
+python-dotenv

@@ -2,27 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import PageShell from "@/components/ui/PageShell";
-import EmptyState from "@/components/ui/EmptyState";
 import SimulationControls from "@/components/SimulationControls";
-import { useSessionData } from "@/hooks/useSessionData";
 
 export default function SimulatePage() {
   const router = useRouter();
-  const { premiumData, workerData, isLoaded } = useSessionData();
-
-  if (!isLoaded) return null;
-
-  if (!premiumData || !workerData) {
-    return (
-      <PageShell activePage="simulate">
-        <EmptyState
-          icon="🧪"
-          title="No Active Policy"
-          description="Activate insurance first to run disruption simulations."
-        />
-      </PageShell>
-    );
-  }
 
   return (
     <PageShell activePage="simulate">
@@ -30,21 +13,28 @@ export default function SimulatePage() {
         <div className="flex items-center gap-4 mb-2">
           <h1 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase text-slate-900">Simulator</h1>
           <span className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-none bg-orange-300 text-slate-900 border-2 border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-            Demo
+            Global Demo
           </span>
         </div>
         <p className="text-slate-600 text-sm font-bold uppercase tracking-wide">
-          Test payout engine for <span className="text-red-600 font-black">{workerData.worker_id}</span>
+          Trigger system-wide climate disruptions
         </p>
+
+        {/* Cross Verification Helpers */}
+        <div className="mt-4 p-4 bg-blue-50 border-2 border-slate-900 rounded-lg shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] sm:max-w-md">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-900 mb-2 border-b-2 border-slate-900 pb-1 flex items-center gap-2">
+             <span>🧪</span> Verification Tool
+          </p>
+          <p className="text-xs font-bold text-slate-700">To test location-based payouts, login via these IDs in another tab:</p>
+          <ul className="mt-3 text-xs font-mono font-bold text-slate-900 space-y-1.5">
+             <li>• <span className="bg-white px-2 py-0.5 border border-slate-900 rounded-sm mr-1 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">USR_BLR_1</span> & <span className="bg-white px-2 py-0.5 border border-slate-900 rounded-sm mr-2 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">USR_BLR_2</span> (Bangalore)</li>
+             <li>• <span className="bg-white px-2 py-0.5 border border-slate-900 rounded-sm mr-2 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">USR_BOM_1</span> (Mumbai)</li>
+          </ul>
+          <p className="text-[10px] font-bold text-slate-500 mt-3 uppercase tracking-wide">Only riders inside the chosen city will receive payouts.</p>
+        </div>
       </div>
 
-      <SimulationControls
-        forecastedIncome={premiumData.forecasted_income}
-        hourlyRate={premiumData.hourly_rate}
-        ambientTemp={premiumData.ambient_temp}
-        workerId={workerData.worker_id}
-        city={workerData.city || 'Bangalore'}
-      />
+      <SimulationControls />
 
       {/* Back to Dashboard */}
       <div className="mt-8 mb-12 pb-8 sm:pb-0">

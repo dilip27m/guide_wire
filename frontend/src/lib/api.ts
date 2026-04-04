@@ -5,6 +5,8 @@ import {
   PayoutResponse,
   DashboardData,
   PolicyActivationRequest,
+  MassPayoutRequest,
+  MassPayoutResponse,
 } from "./types";
 
 // --- Custom Error Class ---
@@ -82,6 +84,10 @@ export async function fetchPremium(data: PremiumRequest): Promise<PremiumRespons
 
 export async function fetchPayout(data: PayoutRequest): Promise<PayoutResponse> {
   return apiRequest<PayoutResponse>("/api/payout", { body: data });
+}
+
+export async function fetchMassPayout(data: MassPayoutRequest): Promise<MassPayoutResponse> {
+  return apiRequest<MassPayoutResponse>("/api/simulate-mass", { body: data });
 }
 
 export async function fetchWorkerDashboard(workerId: string): Promise<DashboardData> {

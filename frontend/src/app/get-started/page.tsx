@@ -41,6 +41,48 @@ export default function GetStartedPage() {
     }
   };
 
+  const handleExistingUser = async (dashboardData: any) => {
+    setLoading(true);
+    setError(null);
+    
+    const wData: WorkerData = {
+      worker_id: dashboardData.worker.worker_id,
+      name: dashboardData.worker.name,
+      city: dashboardData.worker.city,
+      delivery_platform: dashboardData.worker.platform,
+      phone: "1234567890", // placeholder as phone isn't tracked explicitly
+    };
+    
+    setWorkerData(wData);
+
+    // If they already have an active policy, bypass everything
+    if (dashboardData.policy && dashboardData.policy.status === "active") {
+      const pData: PremiumResponse = {
+        status: "active",
+        hourly_rate: 60, // Standard baseline
+        ambient_temp: 32, // standard baseline
+        forecasted_income: dashboardData.policy.weekly_income_prediction,
+        risk_index: dashboardData.policy.risk_index,
+        premium_to_collect: dashboardData.policy.premium_paid,
+        policy_id: dashboardData.policy.policy_id,
+        already_active: true,
+      };
+      saveSessionData(pData, wData);
+      router.push("/dashboard");
+      return;
+    }
+
+    // They exist but no active policy, get a Quote automatically!
+    try {
+      const result = await fetchPremium(wData);
+      setPremiumData(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong fetching quote.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleActivate = () => {
     if (!premiumData || !workerData) return;
     setIsPaymentOpen(true);
@@ -130,7 +172,7 @@ export default function GetStartedPage() {
             <p className="text-sm font-bold text-slate-500 mb-8 ml-13 uppercase tracking-wide">
               Verify your ID to activate auto-protection.
             </p>
-            <WorkerForm onSubmit={handleSubmit} loading={loading} />
+            <WorkerForm onSubmit={handleSubmit} onExistingUser={handleExistingUser} loading={loading} />
           </div>
 
           {/* Result Card */}

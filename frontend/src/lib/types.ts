@@ -20,6 +20,13 @@ export interface PayoutRequest {
   city: string;
 }
 
+export interface MassPayoutRequest {
+  city: string;
+  disruption_type: string;
+  duration_hrs: number;
+  cargo_type: string;
+}
+
 // --- Response Types ---
 export interface PolicyActivationRequest {
   worker_id: string;
@@ -50,6 +57,13 @@ export interface PayoutResponse {
   decay_index: number;
   timestamp: string;
   payout_id?: string;
+}
+
+export interface MassPayoutResponse {
+  disruption_id: string;
+  affected_riders: number;
+  payout_amount_per_rider: number;
+  total_payout_amount: number;
 }
 
 // --- UI Types ---

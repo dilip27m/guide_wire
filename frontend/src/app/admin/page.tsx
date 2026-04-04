@@ -12,6 +12,7 @@ interface AdminStats {
   total_payouts: number;
   loss_ratio: number;
   recent_claims: any[];
+  city_risk_indexes: { city: string, avg_risk: number }[];
 }
 
 interface ForecastRisk {
@@ -93,7 +94,7 @@ export default function AdminDashboardPage() {
               Portfolio Global Analytics & Risk Assessment
             </p>
           </div>
-          
+
           <div className="hidden sm:flex px-4 py-2 bg-red-100 border-2 border-slate-900 rounded-xl items-center gap-2 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
             <span className="relative flex h-3 w-3">
               <span className="animate-ping absolute inline-flex h-full w-full bg-red-400 opacity-75"></span>
@@ -112,10 +113,10 @@ export default function AdminDashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
+
           {/* Claims Feed (8 cols) */}
           <div className="lg:col-span-8 bg-white border-4 border-slate-900 rounded-2xl shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] overflow-hidden flex flex-col h-[500px]">
-             <div className="bg-slate-900 px-6 py-4 flex items-center justify-between border-b-4 border-slate-900">
+            <div className="bg-slate-900 px-6 py-4 flex items-center justify-between border-b-4 border-slate-900">
               <h3 className="font-black text-xl text-white uppercase tracking-tighter flex items-center gap-2">
                 <span className="text-xl">📋</span> Global Claims Feed
               </h3>
@@ -142,8 +143,8 @@ export default function AdminDashboardPage() {
                       <td className="p-4 font-black text-red-600">₹{claim.amount.toFixed(0)}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-1.5">
-                           <span className="w-2 h-2 rounded-full bg-green-500 border border-slate-900"></span>
-                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Auto-Settled</span>
+                          <span className="w-2 h-2 rounded-full bg-green-500 border border-slate-900"></span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Auto-Settled</span>
                         </div>
                       </td>
                     </tr>
@@ -167,31 +168,31 @@ export default function AdminDashboardPage() {
                 <span className="text-xl">🔮</span> Predictive Risk (7 Days)
               </h3>
             </div>
-            
+
             <div className="p-4 space-y-4 overflow-y-auto">
               {!forecasts ? (
-                 <div className="py-8 flex justify-center"><Spinner size="md"/></div>
+                <div className="py-8 flex justify-center"><Spinner size="md" /></div>
               ) : forecasts.length === 0 ? (
-                 <p className="text-center font-bold text-slate-500 text-sm mt-8">No forecast available.</p>
+                <p className="text-center font-bold text-slate-500 text-sm mt-8">No forecast available.</p>
               ) : (
                 forecasts.map(f => (
                   <div key={f.city} className="bg-white border-2 border-slate-900 p-4 rounded-xl shadow-[4px_4px_0px_0px_rgba(15,23,42,1)]">
                     <div className="flex justify-between items-start mb-2">
                       <p className="font-black text-slate-900 uppercase tracking-tight">{f.city}</p>
                       <span className={`px-2 py-0.5 border-2 border-slate-900 rounded-md text-[10px] font-black uppercase tracking-widest
-                        ${f.risk_level === 'HIGH' ? 'bg-red-200 text-red-900' : 
-                          f.risk_level === 'MEDIUM' ? 'bg-orange-200 text-orange-900' : 
-                          'bg-green-200 text-green-900'}`}>
+                        ${f.risk_level === 'HIGH' ? 'bg-red-200 text-red-900' :
+                          f.risk_level === 'MEDIUM' ? 'bg-orange-200 text-orange-900' :
+                            'bg-green-200 text-green-900'}`}>
                         {f.risk_level}
                       </span>
                     </div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">{f.reason}</p>
                     <div className="flex items-center gap-2 mt-3">
-                       <span className="text-sm">🌧️</span>
-                       <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden border border-slate-900">
-                          <div className={`h-full ${f.risk_level === 'HIGH' ? 'bg-red-500' : 'bg-blue-400'}`} style={{ width: `${Math.min(100, (f.rain_mm / 100) * 100)}%` }}></div>
-                       </div>
-                       <span className="text-[10px] font-black w-8 text-right">{f.rain_mm}mm</span>
+                      <span className="text-sm">🌧️</span>
+                      <div className="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden border border-slate-900">
+                        <div className={`h-full ${f.risk_level === 'HIGH' ? 'bg-red-500' : 'bg-blue-400'}`} style={{ width: `${Math.min(100, (f.rain_mm / 100) * 100)}%` }}></div>
+                      </div>
+                      <span className="text-[10px] font-black w-8 text-right">{f.rain_mm}mm</span>
                     </div>
                   </div>
                 ))
@@ -200,6 +201,28 @@ export default function AdminDashboardPage() {
           </div>
 
         </div>
+
+        {/* City Risk Actuarial Table */}
+        {stats?.city_risk_indexes && stats.city_risk_indexes.length > 0 && (
+          <div className="w-full mt-8 bg-blue-100 border-4 border-slate-900 rounded-2xl shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] overflow-hidden flex flex-col">
+            <div className="bg-blue-300 px-6 py-4 flex items-center justify-between border-b-4 border-slate-900">
+              <h3 className="font-black text-lg text-slate-900 uppercase tracking-tighter flex items-center gap-2">
+                <span className="text-xl">📊</span> Actuarial Risk Index by City
+              </h3>
+            </div>
+            <div className="p-6 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {stats.city_risk_indexes.map((cr, i) => (
+                <div key={i} className="bg-white border-2 border-slate-900 rounded-xl p-4 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)] flex flex-col justify-between">
+                  <p className="font-black text-slate-900 uppercase tracking-tighter">{cr.city}</p>
+                  <div className="mt-3 flex items-end gap-2">
+                    <p className="text-3xl font-black text-slate-900 leading-none">{cr.avg_risk.toFixed(2)}</p>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Risk</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </PageShell>
   );

@@ -20,7 +20,7 @@ export async function GET() {
     policies.forEach((p) => {
       realPremiums += p.premium_paid || 0;
     });
-    
+
     // Add a huge baseline buffer so loss ratio looks like a real insurance company
     const HISTORICAL_PREMIUM_POOL = 1500000; // ₹15 Lakhs
     const totalPremiums = HISTORICAL_PREMIUM_POOL + realPremiums;
@@ -38,6 +38,30 @@ export async function GET() {
       .limit(10)
       .lean();
 
+    // 7. Calculate Average Actuarial Risk Index per City
+    const allWorkers = await Worker.find({}).lean() as any[];
+    const workerCityMap: Record<string, string> = {};
+    allWorkers.forEach((w) => {
+      workerCityMap[w.worker_id] = w.city;
+    });
+
+    const cityRiskAgg: Record<string, { totalIndex: number, count: number }> = {};
+    policies.forEach((p) => {
+      if (p.status === "active" && p.risk_index) {
+        const city = workerCityMap[p.worker_id];
+        if (city) {
+          if (!cityRiskAgg[city]) cityRiskAgg[city] = { totalIndex: 0, count: 0 };
+          cityRiskAgg[city].totalIndex += p.risk_index;
+          cityRiskAgg[city].count += 1;
+        }
+      }
+    });
+
+    const city_risk_indexes = Object.keys(cityRiskAgg).map((city) => ({
+      city,
+      avg_risk: roundTo(cityRiskAgg[city].totalIndex / cityRiskAgg[city].count, 2)
+    })).sort((a, b) => b.avg_risk - a.avg_risk);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -47,6 +71,7 @@ export async function GET() {
         total_payouts: totalPayouts,
         loss_ratio: roundTo(lossRatio, 2),
         recent_claims: recentClaims,
+        city_risk_indexes,
       }
     });
 

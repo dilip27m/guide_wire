@@ -440,6 +440,7 @@ class PayoutRequest(BaseModel):
     duration_hrs: float
     cargo_type: Optional[str] = "standard"
     hourly_rate: Optional[float] = None
+    forecasted_income: float = 4200.0
     worker_id: Optional[str] = "unknown"
     city: Optional[str] = "Bangalore"
 
