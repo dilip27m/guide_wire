@@ -405,15 +405,18 @@ async def post_get_premium(req: PremiumRequest):
     with torch.no_grad():
         risk_score = risk_model(weather_norm, city_graph, env).item()
 
-    # Actuarial Weekly Pricing Model (Formula Integration)
+    # Actuarial Weekly Pricing Model (Formula Integration & Constraints)
     forecast, hourly = get_weekly_forecast()
     avg_income_lost = forecast / 7.0
-    daily_trigger_prob = risk_score * 0.05 
+    
+    BASE_PROB_SCALER = 0.012  # Actuarial scaler mapping AI risk -> real world daily probability
+    daily_trigger_prob = risk_score * BASE_PROB_SCALER 
+    
     days_exposed = 6 
     tier_mult = {1: 0.8, 2: 1.0, 3: 1.3}[partner["coverage_tier"]]
     
     raw_weekly_premium = daily_trigger_prob * avg_income_lost * days_exposed * tier_mult
-    premium_weekly = max(20.0, min(raw_weekly_premium, 100.0))
+    premium_weekly = max(20.0, min(raw_weekly_premium, 50.0)) # Strict business rule constraint
 
     return {
         "status": "ok",
