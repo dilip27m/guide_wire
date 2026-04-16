@@ -1,9 +1,9 @@
 """
 Parametric Insurance System — FastAPI Service
 ============================================================
-Architecture: FastAPI + PyTorch + Spacy (No LLM) + Actuarial Math
+Architecture: FastAPI + PyTorch + Spacy (No LLM) + Actuarial Math + Motor (Async DB)
 Models: RiskModel (ST-GNN), ImpactModel (Deterministic), FraudModel (Residual MLP)
-Database: MongoDB (Ready for frontend GPS pings & historical data)
+Database: Async MongoDB (Ready for frontend GPS pings & historical data)
 
 RENDER DEPLOYMENT FIXES (v2):
   - Startup: Use `uvicorn ai_service:app --host 0.0.0.0 --port $PORT`
@@ -36,6 +36,26 @@ from contextlib import asynccontextmanager
 from torch_geometric.nn import GATConv, global_mean_pool, global_max_pool
 from torch_geometric.utils import from_networkx
 
+# ── Async MongoDB Setup ──
+import motor.motor_asyncio
+
+# ==========================================
+# DATABASE PLACEHOLDER
+# BACKEND ENGINEER: Replace this placeholder string with the actual MongoDB URI
+# ==========================================
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://<username>:<password>@cluster.placeholder.mongodb.net/indic_ai?retryWrites=true&w=majority")
+
+try:
+    db_client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    database = db_client["insurance_db"]
+    partners_collection = database["delivery_partners"]
+    policies_collection = database["active_policies"]
+    history_collection = database["rider_history"]
+    live_locations_collection = database["live_locations"]
+    print("✅ Connected to Async MongoDB")
+except Exception as e:
+    print(f"❌ MongoDB Connection Failed: {e}")
+
 # ── Spacy: load lazily to avoid crashing the whole app if model is missing ──
 try:
     import spacy
@@ -46,18 +66,6 @@ except OSError:
 except ImportError:
     print("[Warning] spaCy not installed.")
     nlp = None
-
-# ==========================================
-# TODO TEAMMATES: Uncomment these for real DB
-# ==========================================
-# from pymongo import MongoClient
-# MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
-# db_client = MongoClient(MONGO_URI)
-# database = db_client["insurance_db"]
-# partners_collection = database["delivery_partners"]
-# policies_collection = database["active_policies"]
-# history_collection = database["rider_history"]
-# live_locations_collection = database["live_locations"]
 
 # ─────────────────────────────────────────────
 # CONFIG & API KEYS
@@ -102,48 +110,49 @@ FALLBACK_RIDER = {
 }
 
 # ─────────────────────────────────────────────
-# DATABASE MOCK FETCHER & FORECASTER
+# ASYNC DATABASE FETCHERS & FORECASTER
 # ─────────────────────────────────────────────
-def get_active_riders_from_db():
-    """Fetches all currently active riders and their latest GPS pings."""
+async def get_active_riders_from_db():
+    """Fetches all currently active riders and their latest GPS pings asynchronously."""
     try:
-        # --- TODO TEAMMATES: Swap for real DB call ---
-        # cursor = live_locations_collection.find({"status": "ACTIVE"})
-        # return list(cursor)
-        return []
+        cursor = live_locations_collection.find({"status": "ACTIVE"})
+        return await cursor.to_list(length=1000)
     except Exception as e:
         print(f"[Warning] DB Fetch Active Riders Failed: {e}")
         return []
 
-def get_partner_from_db(worker_id: str) -> dict:
-    """Fetches the delivery partner profile from MongoDB."""
-    print(f"[Database] Fetching profile for {worker_id} from MongoDB...")
-    return {
-        "partner_id": worker_id,
-        "name": "Ravi Kumar",
-        "phone": "9876543210",
-        "lat": 12.9716,
-        "lon": 77.5946,
-        "city_name": "Bangalore",
-        "asset_value": 85000,
-        "coverage_tier": 2,
-    }
+async def get_partner_from_db(worker_id: str) -> dict:
+    """Fetches the delivery partner profile from MongoDB asynchronously."""
+    partner = await partners_collection.find_one({"partner_id": worker_id})
+    if not partner:
+        print(f"[Warning] DB Fetch Partner Failed for {worker_id}, using fallback.")
+        return {
+            "partner_id": worker_id,
+            "name": "Fallback User",
+            "phone": "0000000000",
+            "lat": 12.9716,
+            "lon": 77.5946,
+            "city_name": "Bangalore",
+            "asset_value": 85000,
+            "coverage_tier": 2,
+            "onboarding_date": datetime.now() - timedelta(days=180),
+            "vehicle_registration_date": datetime.now() - timedelta(days=900)
+        }
+    return partner
 
-def get_weekly_forecast(worker_id: str):
-    """Audits up to 52 weeks of data from MongoDB to forecast target earnings."""
+async def get_weekly_forecast(worker_id: str):
+    """Audits up to 52 weeks of data from MongoDB to forecast target earnings asynchronously."""
     try:
-        # --- TODO TEAMMATES: Swap mock list for real DB call ---
-        # cursor = history_collection.find({"rider_id": worker_id}).sort("week_end_date", 1)
-        # records = list(cursor)
-        records = [
-            {"rider_id": worker_id, "week_number": 1, "earnings": 4100},
-            {"rider_id": worker_id, "week_number": 2, "earnings": 4350},
-            {"rider_id": worker_id, "week_number": 3, "earnings": 4000}
-        ]
+        cursor = history_collection.find({"rider_id": worker_id}).sort("week_end_date", 1).limit(52)
+        records = await cursor.to_list(length=52)
+        
         if not records:
             return 4200.0, 60.0
 
         df = pd.DataFrame(records)
+        if 'earnings' not in df.columns:
+            return 4200.0, 60.0
+
         recent_trend = df['earnings'].tail(14).mean()
         yearly_avg   = df['earnings'].mean()
         forecasted_weekly = ((recent_trend * 0.7) + (yearly_avg * 0.3)) * 7
@@ -188,10 +197,7 @@ def fetch_weather_history(lat, lon, days=WEATHER_DAYS_BACK):
 
 def fetch_imd_alert(lat, lon):
     try:
-        r = requests.get(
-            "https://mausam.imd.gov.in/imd_latest/contents/warning_rss.xml",
-            timeout=10
-        )
+        r = requests.get("https://mausam.imd.gov.in/imd_latest/contents/warning_rss.xml", timeout=10)
         if str(lat)[:4] in r.text or "flood" in r.text.lower():
             return True, 999.0, "IMD active alert in region"
     except Exception:
@@ -214,10 +220,7 @@ def fetch_news_events(city_name):
         f"&lang=en&country=in&max=10&token={GNEWS_API_KEY}"
     )
     r = requests.get(url, timeout=10)
-    return [
-        a["title"] + " " + a["description"]
-        for a in r.json().get("articles", [])
-    ]
+    return [a["title"] + " " + a["description"] for a in r.json().get("articles", [])]
 
 def extract_events_fast(news_snippets):
     if not nlp or not news_snippets:
@@ -230,15 +233,12 @@ def extract_events_fast(news_snippets):
         is_blocked  = any(k in s_lower for k in blockage_kw)
         is_flood    = any(k in s_lower for k in flood_kw)
         if is_blocked or is_flood:
-            locations = [
-                ent.text for ent in nlp(snippet).ents
-                if ent.label_ in ["GPE", "LOC", "FAC"]
-            ]
+            locations = [ent.text for ent in nlp(snippet).ents if ent.label_ in ["GPE", "LOC", "FAC"]]
             if locations:
                 events.append({
-                    "location":       locations[0],
-                    "event_type":     "waterlogging" if is_flood else "blockage",
-                    "severity":       "high" if is_blocked else "medium",
+                    "location":        locations[0],
+                    "event_type":      "waterlogging" if is_flood else "blockage",
+                    "severity":        "high" if is_blocked else "medium",
                     "is_road_blocked": is_blocked,
                 })
     return events
@@ -264,10 +264,7 @@ def build_city_graph(lat, lon, blocked_edges=None):
     G_clean.add_edges_from(G_un.edges)
 
     pyg   = from_networkx(G_clean)
-    feats = [
-        [deg.get(n, 0) / max_deg, bc.get(n, 0), cl.get(n, 0)]
-        for n in G_clean.nodes
-    ]
+    feats = [[deg.get(n, 0) / max_deg, bc.get(n, 0), cl.get(n, 0)] for n in G_clean.nodes]
     pyg.x = torch.tensor(feats, dtype=torch.float)
 
     if blocked_edges:
@@ -305,9 +302,7 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         pe  = torch.zeros(max_len, d_model)
         pos = torch.arange(0, max_len).unsqueeze(1).float()
-        div = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
-        )
+        div = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(pos * div)
         pe[:, 1::2] = torch.cos(pos * div)
         self.register_buffer('pe', pe.unsqueeze(0))
@@ -321,10 +316,7 @@ class TemporalEncoder(nn.Module):
         self.conv1d      = nn.Conv1d(in_channels=d_input, out_channels=d_model, kernel_size=3, padding=1)
         self.pos_enc     = PositionalEncoding(d_model)
         self.transformer = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(
-                d_model=d_model, nhead=nhead,
-                dim_feedforward=128, dropout=0.1, batch_first=True
-            ),
+            nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, dim_feedforward=128, dropout=0.1, batch_first=True),
             num_layers=num_layers
         )
         self.norm    = nn.LayerNorm(d_model)
@@ -350,9 +342,7 @@ class SpatialEncoder(nn.Module):
         h2    = self.norm2(F.elu(self.gat2(h1, edge_index)) + self.skip(x))
         h_mean = global_mean_pool(h2, batch)
         h_std  = global_mean_pool((h2 - h_mean[batch]) ** 2, batch).sqrt()
-        return self.pool_proj(
-            torch.cat([h_mean, global_max_pool(h2, batch), h_std], dim=1)
-        )
+        return self.pool_proj(torch.cat([h_mean, global_max_pool(h2, batch), h_std], dim=1))
 
 class RiskModel(nn.Module):
     def __init__(self):
@@ -366,23 +356,18 @@ class RiskModel(nn.Module):
         )
 
     def forward(self, weather_seq, graph, env):
-        return self.fusion(
-            torch.cat([
-                self.temporal(weather_seq),
-                self.spatial(graph.x, graph.edge_index, graph.batch),
-                env
-            ], dim=1)
-        )
+        return self.fusion(torch.cat([
+            self.temporal(weather_seq),
+            self.spatial(graph.x, graph.edge_index, graph.batch),
+            env
+        ], dim=1))
 
 class ImpactModel:
     PAYOUT_TIERS = {"tier1": 0.25, "tier2": 0.50, "tier3": 1.00}
 
     def evaluate(self, event: dict, rain_thresh: float, insured_value: float) -> dict:
         rain = event.get("rainfall_mm", 0)
-        tier = (
-            "tier2" if rain >= rain_thresh * 1.5
-            else ("tier1" if rain >= rain_thresh else None)
-        )
+        tier = "tier2" if rain >= rain_thresh * 1.5 else ("tier1" if rain >= rain_thresh else None)
         if not tier:
             return {"triggered": False, "tier": None, "payout_ratio": 0.0}
         return {
@@ -394,21 +379,11 @@ class ImpactModel:
 class FraudModel(nn.Module):
     def __init__(self, in_features=12):
         super().__init__()
-        self.input_proj = nn.Sequential(
-            nn.Linear(in_features, 64), nn.LayerNorm(64), nn.ReLU(), nn.Dropout(0.2)
-        )
-        self.res1 = nn.Sequential(
-            nn.Linear(64, 64), nn.LayerNorm(64), nn.ReLU(), nn.Dropout(0.15),
-            nn.Linear(64, 64), nn.LayerNorm(64)
-        )
-        self.res2 = nn.Sequential(
-            nn.Linear(64, 32), nn.LayerNorm(32), nn.ReLU(), nn.Dropout(0.10),
-            nn.Linear(32, 32), nn.LayerNorm(32)
-        )
+        self.input_proj = nn.Sequential(nn.Linear(in_features, 64), nn.LayerNorm(64), nn.ReLU(), nn.Dropout(0.2))
+        self.res1 = nn.Sequential(nn.Linear(64, 64), nn.LayerNorm(64), nn.ReLU(), nn.Dropout(0.15), nn.Linear(64, 64), nn.LayerNorm(64))
+        self.res2 = nn.Sequential(nn.Linear(64, 32), nn.LayerNorm(32), nn.ReLU(), nn.Dropout(0.10), nn.Linear(32, 32), nn.LayerNorm(32))
         self.down = nn.Linear(64, 32)
-        self.head = nn.Sequential(
-            nn.ReLU(), nn.Linear(32, 16), nn.ReLU(), nn.Linear(16, 1), nn.Sigmoid()
-        )
+        self.head = nn.Sequential(nn.ReLU(), nn.Linear(32, 16), nn.ReLU(), nn.Linear(16, 1), nn.Sigmoid())
 
     def forward(self, x):
         h = self.input_proj(x)
@@ -423,24 +398,20 @@ risk_model  = RiskModel().to(DEVICE)
 fraud_model = FraudModel().to(DEVICE)
 
 try:
-    risk_model.load_state_dict(
-        torch.load("risk_model_robust.pth", map_location=DEVICE)["model_state"]
-    )
+    risk_model.load_state_dict(torch.load("risk_model_robust.pth", map_location=DEVICE)["model_state"])
     risk_model.eval()
     print("🚀 WEIGHTS LOADED: RiskModel (ST-GNN) is ready.")
 except Exception as e:
-    risk_model.eval()   # ← FIX: always set eval mode even without weights
-    print(f"⚠️  RiskModel WEIGHTS MISSING: {e}. Running with random initialization.")
+    risk_model.eval()
+    print(f"⚠️ RiskModel WEIGHTS MISSING: {e}. Running with random initialization.")
 
 try:
-    fraud_model.load_state_dict(
-        torch.load("fraud_model_best.pth", map_location=DEVICE)["model_state"]
-    )
+    fraud_model.load_state_dict(torch.load("fraud_model_best.pth", map_location=DEVICE)["model_state"])
     fraud_model.eval()
     print("🚀 WEIGHTS LOADED: FraudModel (Residual MLP) is ready.")
 except Exception as e:
-    fraud_model.eval()  # ← FIX: always set eval mode even without weights
-    print(f"⚠️  FraudModel WEIGHTS MISSING: {e}. Running with random initialization.")
+    fraud_model.eval()
+    print(f"⚠️ FraudModel WEIGHTS MISSING: {e}. Running with random initialization.")
 
 active_event  = None
 latest_payout = None
@@ -451,17 +422,15 @@ latest_payout = None
 async def monitoring_oracle():
     """
     Background task polling environment to trigger parametric claims.
-
     FIX: 15-second startup delay ensures the HTTP server binds its port
-    before any blocking network calls are made. Without this, Render's
-    port scanner times out before uvicorn finishes starting.
+    before any blocking network calls are made.
     """
-    await asyncio.sleep(15)   # ← RENDER FIX: let port bind first
+    await asyncio.sleep(15)
 
     global active_event, latest_payout
     while True:
         try:
-            active_riders = get_active_riders_from_db()
+            active_riders = await get_active_riders_from_db()
             if not active_riders:
                 active_riders = [FALLBACK_RIDER]
 
@@ -487,26 +456,26 @@ async def monitoring_oracle():
                         "id":         f"DIS_{uuid.uuid4().hex[:4].upper()}",
                         "start_time": time.time(),
                         "rain":       rain_mm,
+                        "lat":        lat,
+                        "lon":        lon
                     }
                     print(f"🚨 ALERT: Parametric Disruption detected for {rider['rider_id']} in {city}.")
 
                 elif not is_hazard and active_event:
-                    forecast, hourly_rate = get_weekly_forecast(rider["rider_id"])
+                    forecast, hourly_rate = await get_weekly_forecast(rider["rider_id"])
                     duration_hrs = max((time.time() - active_event["start_time"]) / 3600, 1.3)
 
-                    impact  = ImpactModel().evaluate(
-                        {"rainfall_mm": active_event["rain"]}, RAIN_THRESHOLD_MM, 85000
-                    )
+                    impact  = ImpactModel().evaluate({"rainfall_mm": active_event["rain"]}, RAIN_THRESHOLD_MM, 85000)
                     payout  = impact.get("payout_amount", round(hourly_rate * duration_hrs, 2))
 
                     latest_payout = {
-                        "rider_id":                rider["rider_id"],
-                        "disruption_id":           active_event["id"],
-                        "payout_amount":           payout,
+                        "rider_id":                 rider["rider_id"],
+                        "disruption_id":            active_event["id"],
+                        "payout_amount":            payout,
                         "forecasted_weekly_income": forecast,
-                        "duration":                round(duration_hrs, 2),
-                        "location":                rider["location_name"],
-                        "settled_at":              datetime.now().strftime("%H:%M:%S"),
+                        "duration":                 round(duration_hrs, 2),
+                        "location":                 rider.get("location_name", "Unknown"),
+                        "settled_at":               datetime.now().strftime("%H:%M:%S"),
                     }
                     active_event = None
                     print(f"✅ SETTLEMENT: Parametric Payout processed for {rider['rider_id']}.")
@@ -566,29 +535,28 @@ class SettleWeekRequest(BaseModel):
 @app.post("/ping-location")
 async def post_ping_location(req: LocationPingRequest):
     """POST /ping-location — Frontend app calls this periodically to update live GPS."""
-    # --- TODO TEAMMATES: Update MongoDB ---
-    # live_locations_collection.update_one(
-    #     {"rider_id": req.worker_id},
-    #     {
-    #         "$set": {
-    #             "lat": req.lat,
-    #             "lon": req.lon,
-    #             "location_name": req.location_name,
-    #             "status": "ACTIVE",
-    #             "last_ping": datetime.now().isoformat()
-    #         }
-    #     },
-    #     upsert=True
-    # )
+    await live_locations_collection.update_one(
+        {"rider_id": req.worker_id},
+        {
+            "$set": {
+                "lat": req.lat,
+                "lon": req.lon,
+                "location_name": req.location_name,
+                "status": "ACTIVE",
+                "last_ping": datetime.now()
+            }
+        },
+        upsert=True
+    )
     return {"status": "success", "message": f"GPS location logged for {req.worker_id}"}
 
 
 @app.post("/get-premium")
 async def post_get_premium(req: PremiumRequest):
     """POST /get-premium — Calculates Actuarial Premium using ST-GNN."""
-    partner = get_partner_from_db(req.worker_id)
+    partner = await get_partner_from_db(req.worker_id)
 
-    city_name = req.city or "Bangalore"
+    city_name = req.city or partner.get("city_name", "Bangalore")
     coords    = CITY_COORDS.get(city_name, CITY_COORDS["Bangalore"])
     lat, lon  = coords["lat"], coords["lon"]
 
@@ -604,44 +572,58 @@ async def post_get_premium(req: PremiumRequest):
     with torch.no_grad():
         risk_score = risk_model(weather_norm, city_graph, env).item()
 
-    forecast, hourly = get_weekly_forecast(req.worker_id)
+    forecast, hourly = await get_weekly_forecast(req.worker_id)
     avg_income_lost  = forecast / 7.0
 
     BASE_PROB_SCALER   = 0.012
     daily_trigger_prob = risk_score * BASE_PROB_SCALER
 
     days_exposed  = 6
-    tier_mult     = {1: 0.8, 2: 1.0, 3: 1.3}[partner["coverage_tier"]]
+    tier_mult     = {1: 0.8, 2: 1.0, 3: 1.3}.get(partner.get("coverage_tier", 2), 1.0)
 
     raw_weekly_premium = daily_trigger_prob * avg_income_lost * days_exposed * tier_mult
     premium_weekly     = 20.0 + 30.0 * math.tanh(raw_weekly_premium / 100.0)
 
     return {
-        "status":            "ok",
-        "forecasted_income": forecast,
-        "risk_index":        round(risk_score, 4),
+        "status":             "ok",
+        "forecasted_income":  forecast,
+        "risk_index":         round(risk_score, 4),
         "premium_to_collect": round(premium_weekly, 2),
-        "hourly_rate":       hourly,
-        "ambient_temp":      28.0,
-        "platform":          "Swiggy",
-        "city":              partner["city_name"],
+        "hourly_rate":        hourly,
+        "ambient_temp":       28.0,
+        "platform":           "Swiggy",
+        "city":               city_name,
     }
 
 
 @app.post("/get-payout")
 async def post_get_payout(req: PayoutRequest):
-    """POST /get-payout — Evaluates Fraud Model & Finalizes Payment."""
-    global latest_payout
+    """POST /get-payout — Evaluates Fraud Model & Finalizes Payment Dynamically via Async DB."""
+    global latest_payout, active_event
+
+    # Concurrently fetch requisite documentation for fraud inference
+    partner_task  = get_partner_from_db(req.worker_id)
+    claims_task   = history_collection.count_documents({
+        "rider_id": req.worker_id,
+        "status": "PAID",
+        "timestamp": {"$gte": datetime.now() - timedelta(days=365)}
+    })
+    location_task = live_locations_collection.find_one({"rider_id": req.worker_id})
+    policy_task   = policies_collection.find_one({"rider_id": req.worker_id, "status": "ACTIVE"})
+
+    partner, claims_count, loc_data, policy = await asyncio.gather(
+        partner_task, claims_task, location_task, policy_task
+    )
 
     if latest_payout and latest_payout["disruption_id"] == req.disruption_id:
         payout_amount = latest_payout["payout_amount"]
     else:
-        _, default_hourly = get_weekly_forecast(req.worker_id)
+        _, default_hourly = await get_weekly_forecast(req.worker_id)
         hourly            = req.hourly_rate if req.hourly_rate else default_hourly
-
-        avg_income_lost      = req.forecasted_income / 7.0
+        avg_income_lost   = req.forecasted_income / 7.0
+        
         daily_trigger_prob_avg = 0.45 * 0.012
-        raw_weekly_premium   = daily_trigger_prob_avg * avg_income_lost * 6 * 1.0
+        raw_weekly_premium     = daily_trigger_prob_avg * avg_income_lost * 6 * 1.0
 
         coverage_ratio = 1.0
         if raw_weekly_premium > 0:
@@ -650,19 +632,34 @@ async def post_get_payout(req: PayoutRequest):
 
         payout_amount = round(hourly * max(req.duration_hrs, 0.5) * coverage_ratio, 2)
 
+    # Dynamic Feature Calculation
+    now = datetime.now()
+    onboarding_date = partner.get("onboarding_date", now - timedelta(days=180))
+    vehicle_reg_date = partner.get("vehicle_registration_date", now - timedelta(days=365*2.5))
+    
+    time_to_claim_hrs = 0.0
+    gps_dist_km = 0.0
+    if active_event:
+        time_to_claim_hrs = (time.time() - active_event.get("start_time", time.time())) / 3600.0
+        if loc_data and "lat" in active_event:
+            gps_dist_km = haversine_km(active_event["lat"], active_event["lon"], loc_data["lat"], loc_data["lon"])
+
+    coverage_amt = policy.get("coverage_amount", 50000) if policy else 50000
+    asset_value  = partner.get("asset_value", 85000)
+
     claim_features = {
-        "days_since_purchase":    180,
-        "claims_last_12m":        0,
-        "time_to_claim_hrs":      0.5,
-        "gps_dist_from_event_km": 1.2,
-        "location_consistency":   0.95,
-        "gps_spoofing_flag":      0,
-        "claim_matches_event_type": 1,
-        "was_delivering_at_event":  1,
-        "delivery_km_that_day":   45.0,
-        "vehicle_age_yrs":        2.5,
-        "overinsurance_ratio":    1.0,
-        "num_policies_same_phone": 1,
+        "days_since_purchase":      (now - onboarding_date).days,
+        "claims_last_12m":          claims_count,
+        "time_to_claim_hrs":        time_to_claim_hrs,
+        "gps_dist_from_event_km":   gps_dist_km,
+        "location_consistency":     0.95, 
+        "gps_spoofing_flag":        0,    
+        "claim_matches_event_type": 1 if req.disruption_type in ["weather", "blockage"] else 0,
+        "was_delivering_at_event":  1 if (loc_data and loc_data.get("status") == "ACTIVE") else 0,
+        "delivery_km_that_day":     45.0, 
+        "vehicle_age_yrs":          (now - vehicle_reg_date).days / 365.0,
+        "overinsurance_ratio":      coverage_amt / max(asset_value, 1),
+        "num_policies_same_phone":  1,
     }
 
     norms = {
@@ -680,28 +677,25 @@ async def post_get_payout(req: PayoutRequest):
         "num_policies_same_phone":  lambda x: np.clip(x / 3.0, 0, 1),
     }
 
-    x = torch.tensor(
-        [[norms[f](claim_features[f]) for f in FEATURE_NAMES]],
-        dtype=torch.float
-    ).to(DEVICE)
+    x = torch.tensor([[norms[f](claim_features[f]) for f in FEATURE_NAMES]], dtype=torch.float).to(DEVICE)
 
     with torch.no_grad():
         fraud_prob = fraud_model(x).item()
 
     if fraud_prob > 0.65:
         return {
-            "status":       "flagged",
+            "status":        "flagged",
             "disruption_id": req.disruption_id,
             "payout_amount": 0.0,
-            "reason":       "Fraud probability exceeds safety threshold.",
+            "reason":        "Fraud probability exceeds safety threshold.",
         }
 
     return {
-        "status":           "approved",
-        "disruption_id":    req.disruption_id,
-        "payout_amount":    payout_amount,
+        "status":            "approved",
+        "disruption_id":     req.disruption_id,
+        "payout_amount":     payout_amount,
         "fraud_probability": round(fraud_prob, 4),
-        "timestamp":        datetime.now().isoformat(),
+        "timestamp":         datetime.now().isoformat(),
     }
 
 
