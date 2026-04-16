@@ -27,7 +27,6 @@ export interface MassPayoutRequest {
   cargo_type: string;
 }
 
-// --- Response Types ---
 export interface PolicyActivationRequest {
   worker_id: string;
   payment_id: string;
@@ -35,6 +34,16 @@ export interface PolicyActivationRequest {
   risk_index: number;
   forecasted_income: number;
 }
+
+/** Sent to POST /api/ping-location (and forwarded to ai_service.py /ping-location) */
+export interface LocationPingRequest {
+  worker_id: string;
+  lat: number;
+  lon: number;
+  location_name?: string;
+}
+
+// --- Response Types ---
 
 export interface PremiumResponse {
   status: string;
@@ -88,25 +97,36 @@ export interface DisruptionScenario {
   description: string;
 }
 
-// --- Database Types (for API responses) ---
+// --- Database Types (for API responses from Next.js API routes) ---
+// NOTE: field names here reflect what the Mongoose models return,
+//       which are now aligned with ai_service.py collection schemas.
 
 export interface IWorkerData {
-  worker_id: string;
+  partner_id: string;          // was worker_id — aligned with delivery_partners
+  name: string;
+  phone: string;
   platform: string;
-  city: string;
+  city_name: string;           // was city — aligned with ai_service.py
   assigned_zone: string;
+  lat: number;                 // NEW — ai_service.py GPS features
+  lon: number;                 // NEW — ai_service.py GPS features
+  asset_value: number;         // NEW — ai_service.py overinsurance_ratio
+  coverage_tier: number;       // NEW — ai_service.py premium multiplier
+  onboarding_date: string;     // NEW — ai_service.py days_since_purchase
+  vehicle_registration_date: string; // NEW — ai_service.py vehicle_age_yrs
   created_at: string;
 }
 
 export interface IPolicyData {
   policy_id: string;
-  worker_id: string;
+  rider_id: string;            // was worker_id — aligned with active_policies
   weekly_income_prediction: number;
   premium_paid: number;
   risk_index: number;
+  coverage_amount: number;     // NEW — ai_service.py overinsurance_ratio
   start_date: string;
   end_date: string;
-  status: "active" | "expired" | "cancelled";
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED"; // uppercase — aligned with ai_service.py
 }
 
 export interface IPayoutData {
@@ -117,6 +137,23 @@ export interface IPayoutData {
   status: "simulated" | "completed";
   cargo_spoiled: boolean;
   decay_index: number;
+  timestamp: string;
+}
+
+export interface ILiveLocationData {
+  rider_id: string;
+  lat: number;
+  lon: number;
+  location_name: string;
+  status: "ACTIVE" | "INACTIVE";
+  last_ping: string;
+}
+
+export interface IRiderHistoryData {
+  rider_id: string;
+  week_end_date: string;
+  earnings: number;
+  status: "PAID" | "PENDING" | "SKIPPED";
   timestamp: string;
 }
 

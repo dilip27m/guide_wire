@@ -8,6 +8,7 @@ import ErrorAlert from "@/components/ui/ErrorAlert";
 import Spinner from "@/components/ui/Spinner";
 import DashboardStats from "@/components/DashboardStats";
 import PaymentHistoryCard from "@/components/PaymentHistoryCard";
+import PayoutReceiptModal from "@/components/PayoutReceiptModal";
 import { useSessionData } from "@/hooks/useSessionData";
 import { useNotifications } from "@/hooks/useNotifications";
 import { fetchWorkerDashboard } from "@/lib/api";
@@ -25,6 +26,14 @@ export default function DashboardPage() {
   // Settlement state
   const [settling, setSettling] = useState(false);
   const [settlementMsg, setSettlementMsg] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
+
+  // Payout receipt modal state
+  const [receiptData, setReceiptData] = useState<{
+    amount: number;
+    weekLabel?: string;
+    payoutCount?: number;
+  } | null>(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
 
   const loadDashboard = useCallback(() => {
     if (!workerData) return;
@@ -72,12 +81,20 @@ export default function DashboardPage() {
         const msg = `₹${data.total_payout.toFixed(2)} transferred for ${data.payout_count} claim${data.payout_count !== 1 ? "s" : ""}.`;
         setSettlementMsg({ type: "success", text: `Week settled! ${msg}` });
 
+        // 🆕 Show UPI receipt modal animation FIRST
+        setReceiptData({
+          amount:      data.total_payout,
+          weekLabel:   data.week_label,
+          payoutCount: data.payout_count,
+        });
+        setReceiptOpen(true);
+
         // Push persistent notification to the bell
         addNotification({
-          type: "settlement",
-          title: "💸 Payout Received!",
-          message: msg,
-          amount: data.total_payout,
+          type:       "settlement",
+          title:      "💸 Payout Received!",
+          message:    msg,
+          amount:     data.total_payout,
           week_label: data.week_label,
         });
 
@@ -123,7 +140,7 @@ export default function DashboardPage() {
 
             {/* Next payment date */}
             {(() => {
-              const activePolicy = dbData?.policies?.find(p => p.status === "active");
+              const activePolicy = dbData?.policies?.find(p => p.status === "ACTIVE");  // uppercase — ai_service.py
               if (!activePolicy) return null;
               const nextDate = new Date(activePolicy.end_date);
               const isOverdue = nextDate < new Date();
@@ -172,5 +189,20 @@ export default function DashboardPage() {
 
       </div>
     </PageShell>
+
+    {/* UPI / IMPS Payout Receipt Modal — fires on settle-week success */}
+    {receiptData && (
+      <PayoutReceiptModal
+        isOpen={receiptOpen}
+        amount={receiptData.amount}
+        workerId={workerData?.worker_id || ""}
+        weekLabel={receiptData.weekLabel}
+        payoutCount={receiptData.payoutCount}
+        onClose={() => {
+          setReceiptOpen(false);
+          setTimeout(() => setReceiptData(null), 400); // allow fade-out
+        }}
+      />
+    )}
   );
 }

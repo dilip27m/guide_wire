@@ -17,16 +17,26 @@ type Transaction = {
 };
 
 // --- Disruption type → human-readable label + icon ---
+// Aligned with all 5 oracle triggers in ai_service.py
 const DISRUPTION_META: Record<string, { label: string; icon: string }> = {
-  heavy_rain: { label: "Heavy Rain Disruption", icon: "🌧️" },
-  heatwave:   { label: "Heatwave Alert", icon: "🔥" },
-  strike:     { label: "Strike / Bandh", icon: "✊" },
-  pollution:  { label: "Pollution Spike", icon: "🏭" },
+  heavy_rain: { label: "Heavy Rain Disruption",   icon: "🌧️" },
+  road_block: { label: "Road Blockage",            icon: "🚧" },
+  aqi_spike:  { label: "Air Quality Alert",        icon: "🏭" },
+  heatwave:   { label: "Heatwave Alert",           icon: "🔥" },
+  strike:     { label: "Strike / Bandh",           icon: "✊" },
+  pollution:  { label: "Pollution Spike",          icon: "🏭" },  // legacy
+  DIS:        { label: "Auto-Detected Event",      icon: "🤖" },  // oracle-generated
 };
 
 function getDisruptionMeta(disruption_id: string) {
-  const type = disruption_id.split("_")[0];
-  return DISRUPTION_META[type] || { label: "Parametric Payout", icon: "⚡" };
+  // disruption_id format: "heavy_rain_1713..." or "DIS_ABCD" or "DIS-WRK-1042-2"
+  // Strategy: check all known keys as prefixes, longest match wins
+  const known = Object.keys(DISRUPTION_META);
+  const matched = known
+    .filter(k => disruption_id.startsWith(k) || disruption_id.includes(`_${k}_`) || disruption_id.split("_")[0] === k)
+    .sort((a, b) => b.length - a.length); // longest match wins
+  const key = matched[0] || disruption_id.split("_")[0];
+  return DISRUPTION_META[key] || { label: "Parametric Payout", icon: "⚡" };
 }
 
 export default function PaymentHistoryCard({ policies, payouts }: PaymentHistoryCardProps) {
@@ -41,7 +51,7 @@ export default function PaymentHistoryCard({ policies, payouts }: PaymentHistory
       amount: policy.premium_paid,
       description: "Weekly Coverage Premium",
       icon: "🛡️",
-      status: policy.status === "active" ? "Active" : "Paid",
+      status: policy.status === "ACTIVE" ? "Active" : "Paid",  // uppercase — ai_service.py
     });
   });
 
