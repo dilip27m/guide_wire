@@ -27,6 +27,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from dotenv import load_dotenv
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', '.env'))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -43,7 +47,7 @@ import motor.motor_asyncio
 # DATABASE PLACEHOLDER
 # BACKEND ENGINEER: Replace this placeholder string with the actual MongoDB URI
 # ==========================================
-MONGO_URI = os.getenv("MONGO_URI")
+MONGO_URI = os.getenv("MONGO_URI") or os.getenv("MONGODB_URI")
 if not MONGO_URI:
     raise ValueError(
         "MONGO_URI environment variable is not set. "
