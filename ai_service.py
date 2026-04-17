@@ -57,6 +57,7 @@ try:
     policies_collection = database["active_policies"]
     history_collection = database["rider_history"]
     live_locations_collection = database["live_locations"]
+    gps_ping_log_collection = database["gps_ping_log"]   # FIX: append-only log for speed detection
     print("✅ Connected to Async MongoDB")
 except Exception as e:
     print(f"❌ MongoDB Connection Failed: {e}")
@@ -513,17 +514,21 @@ async def monitoring_oracle():
                 city     = rider.get('location_name', 'Bangalore').split(',')[-1].strip()
 
                 # Fetch all trigger data concurrently
+                # FIX: fetch_weather_history only takes 2 positional args (lat, lon);
+                #      days= is a keyword-only default. Pass days=1 as kwarg.
                 rain_future    = asyncio.to_thread(fetch_imd_alert,  lat, lon)
                 news_future    = asyncio.to_thread(fetch_news_events, city)
                 aqi_future     = asyncio.to_thread(fetch_aqi,         lat, lon)
-                weather_future = asyncio.to_thread(fetch_weather_history, lat, lon, 1)  # just today
+                weather_future = asyncio.to_thread(fetch_weather_history, lat, lon)
 
                 try:
-                    rain_result, news_snippets, aqi_result, weather_today = await asyncio.gather(
+                    rain_result, news_snippets, aqi_result, weather_arr = await asyncio.gather(
                         rain_future, news_future, aqi_future, weather_future
                     )
                     _, rain_mm, rain_reason   = rain_result
                     is_aqi_bad, aqi_val, aqi_reason = aqi_result
+                    # Use last day of full weather history for heatwave check
+                    weather_today = weather_arr[-1:] if len(weather_arr) > 0 else weather_arr
                 except Exception as e:
                     print(f"Oracle API Fetch Error for {city}: {e}")
                     continue
@@ -617,6 +622,7 @@ class PayoutRequest(BaseModel):
     cargo_type:       Optional[str]   = "standard"
     hourly_rate:      Optional[float] = None
     forecasted_income: float          = 4200.0
+    ambient_temp:     Optional[float] = 32.0   # FIX: was ignored — used by ImpactModel heat factor
     worker_id:        Optional[str]   = "unknown"
     city:             Optional[str]   = "Bangalore"
 
@@ -632,7 +638,13 @@ class SettleWeekRequest(BaseModel):
 
 @app.post("/ping-location")
 async def post_ping_location(req: LocationPingRequest):
-    """POST /ping-location — Frontend app calls this periodically to update live GPS."""
+    """POST /ping-location — Frontend app calls this periodically to update live GPS.
+    FIX: In addition to upserting live_locations (for oracle active-rider scan),
+    we now also APPEND each ping to gps_ping_log so /get-payout can query the
+    last 2 pings by timestamp and compute real speed (was always 0.5 default).
+    """
+    ping_ts = datetime.now()
+    # 1. Upsert live_locations — oracle uses this to find active riders
     await live_locations_collection.update_one(
         {"rider_id": req.worker_id},
         {
@@ -641,11 +653,19 @@ async def post_ping_location(req: LocationPingRequest):
                 "lon": req.lon,
                 "location_name": req.location_name,
                 "status": "ACTIVE",
-                "last_ping": datetime.now()
+                "last_ping": ping_ts
             }
         },
         upsert=True
     )
+    # 2. Append to gps_ping_log — fraud detection reads last 2 docs sorted by ts
+    await gps_ping_log_collection.insert_one({
+        "rider_id": req.worker_id,
+        "lat": req.lat,
+        "lon": req.lon,
+        "location_name": req.location_name,
+        "ts": ping_ts,
+    })
     return {"status": "success", "message": f"GPS location logged for {req.worker_id}"}
 
 
@@ -708,10 +728,12 @@ async def post_get_payout(req: PayoutRequest):
     })
     location_task   = live_locations_collection.find_one({"rider_id": req.worker_id})
     policy_task     = policies_collection.find_one({"rider_id": req.worker_id, "status": "ACTIVE"})
-    # Fetch last 2 GPS pings to detect teleportation (gps_spoofing_flag)
-    gps_history_task = live_locations_collection.find(
+    # FIX: Fetch last 2 GPS pings from gps_ping_log (append-only) to detect teleportation.
+    # live_locations is an upsert collection (1 doc per rider) so .limit(2) always returned
+    # 1 doc and speed was never computed — stuck at 0.5 default.
+    gps_history_task = gps_ping_log_collection.find(
         {"rider_id": req.worker_id}
-    ).sort("last_ping", -1).limit(2).to_list(length=2)
+    ).sort("ts", -1).limit(2).to_list(length=2)
 
     partner, claims_count, loc_data, policy, gps_history = await asyncio.gather(
         partner_task, claims_task, location_task, policy_task, gps_history_task
@@ -761,8 +783,9 @@ async def post_get_payout(req: PayoutRequest):
     if len(gps_history) >= 2:
         p1, p2 = gps_history[0], gps_history[1]
         jump_km = haversine_km(p1["lat"], p1["lon"], p2["lat"], p2["lon"])
+        # FIX: gps_ping_log uses "ts" field (not "last_ping")
         time_diff_hrs = max(
-            abs((p1.get("last_ping", datetime.now()) - p2.get("last_ping", datetime.now())).total_seconds()) / 3600.0,
+            abs((p1.get("ts", datetime.now()) - p2.get("ts", datetime.now())).total_seconds()) / 3600.0,
             0.001  # prevent division by zero
         )
         speed_kmh = jump_km / time_diff_hrs
@@ -851,6 +874,17 @@ async def post_get_payout(req: PayoutRequest):
     }
 
 
+@app.get("/latest-payout")
+async def get_latest_payout():
+    """GET /latest-payout — Worker dashboard polls this every 30s to show oracle auto-payouts.
+    Returns the most recent payout settled by the monitoring oracle, or null if none yet.
+    Frontend: useEffect with setInterval(30_000) in dashboard/page.tsx.
+    """
+    if latest_payout is None:
+        return {"status": "no_payout", "payout": None}
+    return {"status": "ok", "payout": latest_payout}
+
+
 @app.post("/settle-week")
 async def settle_week(req: SettleWeekRequest):
     """POST /settle-week — called when 'End of Week' button is clicked."""
@@ -914,7 +948,8 @@ async def get_cron():
     return {
         "status":       "alive",
         "timestamp":    datetime.now().isoformat(),
-        "active_event": active_event is not None,
+        # FIX: was `active_event` (undefined old global); now active_events is a dict
+        "active_event": bool(active_events),
     }
 
 

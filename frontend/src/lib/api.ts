@@ -78,6 +78,7 @@ export async function fetchPremium(data: PremiumRequest): Promise<PremiumRespons
       phone: data.phone,
       city: data.city,
       delivery_platform: data.delivery_platform,
+      coverage_tier: data.coverage_tier,
     },
   });
 }

@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(responseData);
   } catch (error) {
     console.error("[activate-route] Error:", error);
-    return NextResponse.json({ error: "Failed to activate policy" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Failed to activate policy";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

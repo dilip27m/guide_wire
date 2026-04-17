@@ -6,6 +6,7 @@ export interface PremiumRequest {
   phone: string;
   city: string;
   delivery_platform: string;
+  coverage_tier?: 1 | 2 | 3;
 }
 
 export interface PayoutRequest {
@@ -83,9 +84,10 @@ export interface WorkerData {
   phone: string;
   city: string;
   delivery_platform: string;
+  coverage_tier?: 1 | 2 | 3;  // 1=Basic(0.8×), 2=Standard(1.0×), 3=Premium(1.3×)
 }
 
-export type DisruptionType = "heavy_rain" | "heatwave" | "strike" | "pollution";
+export type DisruptionType = "heavy_rain" | "heatwave" | "strike" | "pollution" | "road_block" | "aqi_spike";
 
 export interface DisruptionScenario {
   type: DisruptionType;

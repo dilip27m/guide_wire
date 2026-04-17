@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PageShell from "@/components/ui/PageShell";
 import EmptyState from "@/components/ui/EmptyState";
 import ErrorAlert from "@/components/ui/ErrorAlert";
@@ -14,8 +13,9 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { fetchWorkerDashboard } from "@/lib/api";
 import { DashboardData } from "@/lib/types";
 
+const AI_SERVICE_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
+
 export default function DashboardPage() {
-  const router = useRouter();
   const { premiumData, workerData, isLoaded } = useSessionData();
   const { addNotification } = useNotifications();
 
@@ -35,6 +35,16 @@ export default function DashboardPage() {
   } | null>(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
 
+  // Oracle auto-payout banner state
+  const [activeDisruption, setActiveDisruption] = useState<{
+    disruption_id: string;
+    trigger: string;
+    payout_amount: number;
+    location: string;
+    settled_at: string;
+  } | null>(null);
+  const lastSeenPayoutId = useRef<string | null>(null);
+
   const loadDashboard = useCallback(() => {
     if (!workerData) return;
     setDbLoading(true);
@@ -48,6 +58,45 @@ export default function DashboardPage() {
     if (!isLoaded || !workerData) return;
     loadDashboard();
   }, [isLoaded, workerData, loadDashboard]);
+
+  // ── Oracle Auto-Payout Polling (every 30s) ─────────────────────────────────
+  useEffect(() => {
+    if (!isLoaded || !workerData) return;
+
+    const pollOraclePayout = async () => {
+      try {
+        const res = await fetch(`${AI_SERVICE_URL}/latest-payout`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "ok" && data.payout) {
+          const p = data.payout;
+          // Only show if it's a new payout for THIS rider and not already seen
+          if (
+            p.rider_id === workerData.worker_id &&
+            p.disruption_id !== lastSeenPayoutId.current
+          ) {
+            lastSeenPayoutId.current = p.disruption_id;
+            setActiveDisruption(p);
+            addNotification({
+              type: "settlement",
+              title: "🚨 Oracle Auto-Payout!",
+              message: `₹${p.payout_amount.toFixed(2)} credited for ${p.trigger} disruption`,
+              amount: p.payout_amount,
+            });
+            // Auto-dismiss banner after 60s
+            setTimeout(() => setActiveDisruption(null), 60_000);
+          }
+        }
+      } catch {
+        // Silently ignore poll failures (network / Render cold-start)
+      }
+    };
+
+    pollOraclePayout(); // immediate first check
+    const interval = setInterval(pollOraclePayout, 30_000);
+    return () => clearInterval(interval);
+  }, [isLoaded, workerData, addNotification]);
+
 
   if (!isLoaded) return null;
 
@@ -116,8 +165,34 @@ export default function DashboardPage() {
   };
 
   return (
+    <>
     <PageShell activePage="dashboard" maxWidth="6xl">
       <div className="flex flex-col gap-8 sm:gap-12 pt-2">
+
+        {/* Active Disruption Banner — fires when oracle settles a payout */}
+        {activeDisruption && (
+          <div className="relative overflow-hidden flex items-center gap-4 p-4 sm:p-5 bg-red-500 border-4 border-slate-900 rounded-xl shadow-[6px_6px_0px_0px_rgba(15,23,42,1)] animate-in slide-in-from-top-4 duration-500">
+            <div className="w-12 h-12 shrink-0 rounded-lg bg-white border-2 border-slate-900 flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+              <span className="text-2xl">🚨</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-white uppercase tracking-widest text-sm">Active Disruption — Oracle Settled</p>
+              <p className="text-red-100 font-bold text-xs mt-0.5 truncate">
+                {activeDisruption.trigger.replaceAll("_", " ").toUpperCase()} • {activeDisruption.location} • {activeDisruption.settled_at}
+              </p>
+            </div>
+            <div className="shrink-0 px-4 py-2 bg-white border-2 border-slate-900 rounded-lg shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+              <p className="font-black text-slate-900 text-lg">₹{activeDisruption.payout_amount.toFixed(0)}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">credited</p>
+            </div>
+            <button
+              onClick={() => setActiveDisruption(null)}
+              className="shrink-0 w-8 h-8 rounded-lg bg-red-600 border-2 border-white flex items-center justify-center text-white font-black hover:bg-red-700 transition-colors"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* 1. Header Section — Full Width */}
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 pb-6 border-b-4 border-slate-900 border-dashed">
@@ -204,5 +279,6 @@ export default function DashboardPage() {
         }}
       />
     )}
+    </>
   );
 }

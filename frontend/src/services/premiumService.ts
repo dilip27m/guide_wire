@@ -23,6 +23,7 @@ export interface CreatePremiumInput {
   phone: string;
   city: string;
   delivery_platform: string;
+  coverage_tier?: 1 | 2 | 3;
 }
 
 export const premiumService = {
@@ -77,9 +78,9 @@ export const premiumService = {
           platform:             input.delivery_platform,
           delivery_platform:    input.delivery_platform,
           city_name:            input.city,       // was: city — ai_service.py uses city_name
-          lat:                  coords.lat,       // NEW: ai_service.py reads lat for GPS distance calc
-          lon:                  coords.lon,       // NEW: ai_service.py reads lon for GPS distance calc
-          // asset_value, coverage_tier, onboarding_date kept at defaults on insert
+          lat:                  coords.lat,       // ai_service.py reads lat for GPS distance calc
+          lon:                  coords.lon,       // ai_service.py reads lon for GPS distance calc
+          coverage_tier:        input.coverage_tier ?? 2,  // FIX: persist selected tier (was always default 2)
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
@@ -161,7 +162,8 @@ export const premiumService = {
       };
     } catch (error) {
       console.error("[premiumService] Activation error:", error);
-      throw new Error("Failed to activate policy");
+      // Re-throw original — preserves "Already activated this week" etc. for the UI
+      throw error instanceof Error ? error : new Error("Failed to activate policy");
     }
   },
 };

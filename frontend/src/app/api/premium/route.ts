@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
       phone: body.phone || "",
       city: body.city || "Bangalore",
       delivery_platform: body.delivery_platform || "Swiggy",
+      coverage_tier: [1, 2, 3].includes(body.coverage_tier) ? body.coverage_tier : 2,
     });
     return NextResponse.json(responseData);
   } catch (error) {
