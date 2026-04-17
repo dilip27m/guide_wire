@@ -10,4 +10,5 @@ networkx
 torch
 torch_geometric
 pymongo
+motor           # async MongoDB driver — used in ai_service.py (motor.motor_asyncio)
 python-dotenv

@@ -60,4 +60,23 @@ export const SCENARIOS: DisruptionScenario[] = [
     ambient_temp: 34,
     description: "AQI exceeds 400, outdoor work not recommended",
   },
+  {
+    type: "road_block",
+    label: "Road Blockage",
+    icon: "🚧",
+    duration_hrs: 3,
+    cargo_type: "Standard_Meal",
+    ambient_temp: 30,
+    description: "Major arterial roads blocked — diversions add 40%+ delivery time",
+  },
+  {
+    type: "aqi_spike",
+    label: "AQI Spike",
+    icon: "😷",
+    duration_hrs: 4,
+    cargo_type: "Stable",
+    ambient_temp: 36,
+    description: "Sudden AQI surge (OWM level 4-5), outdoor health risk declared",
+  },
 ];
+

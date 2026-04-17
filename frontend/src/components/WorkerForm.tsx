@@ -20,6 +20,7 @@ export default function WorkerForm({ onSubmit, onExistingUser, loading }: Worker
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState<string>(CITIES[0]);
   const [platform, setPlatform] = useState<string>(PLATFORMS[0]);
+  const [coverageTier, setCoverageTier] = useState<1 | 2 | 3>(2);
 
   const isValidStep1 = workerId.trim().length > 2;
   const isValidStep2 = name.trim().length > 1 && phone.trim().length >= 10;
@@ -56,6 +57,7 @@ export default function WorkerForm({ onSubmit, onExistingUser, loading }: Worker
       phone: phone.trim(),
       city,
       delivery_platform: platform,
+      coverage_tier: coverageTier,
     });
   };
 
@@ -164,6 +166,41 @@ export default function WorkerForm({ onSubmit, onExistingUser, loading }: Worker
               <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                 <svg className="w-4 h-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
               </div>
+            </div>
+          </div>
+
+          {/* Coverage Tier */}
+          <div className="relative group">
+            <label className="absolute -top-3 left-4 px-2 bg-white text-xs font-black uppercase tracking-widest text-slate-900 z-10">
+              Coverage Tier
+            </label>
+            <div className="grid grid-cols-3 gap-2 pt-2">
+              {([
+                { tier: 1 as const, label: "Basic",    desc: "0.8× premium",  color: "bg-blue-100   border-blue-400"  },
+                { tier: 2 as const, label: "Standard", desc: "1.0× premium",  color: "bg-yellow-100 border-yellow-400" },
+                { tier: 3 as const, label: "Premium",  desc: "1.3× premium",  color: "bg-green-100  border-green-500"  },
+              ]).map(({ tier, label, desc, color }) => (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => setCoverageTier(tier)}
+                  className={`relative flex flex-col items-center justify-center p-3 rounded-xl border-4 transition-all font-black text-slate-900 ${
+                    coverageTier === tier
+                      ? `${color} shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] -translate-y-0.5`
+                      : "bg-white border-slate-300 hover:border-slate-700"
+                  }`}
+                >
+                  <span className="text-xs uppercase tracking-widest">{label}</span>
+                  <span className="text-[10px] font-bold text-slate-500 mt-0.5">{desc}</span>
+                  {coverageTier === tier && (
+                    <span className="absolute -top-2 -right-2 w-5 h-5 bg-slate-900 rounded-full flex items-center justify-center">
+                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>

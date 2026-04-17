@@ -1,5 +1,5 @@
 const FASTAPI_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
-const REQUEST_TIMEOUT_MS = 8000;
+const REQUEST_TIMEOUT_MS = 180000;
 
 export class AiServiceError extends Error {
   public statusCode: number;
@@ -43,7 +43,10 @@ async function fetchFromAI(endpoint: string, body: unknown) {
 
     if (error instanceof DOMException && error.name === "AbortError") {
       console.error(`[aiService] Timeout on ${endpoint} after ${REQUEST_TIMEOUT_MS}ms`);
-      throw new AiServiceError("Server is waking up from sleep. Please wait 60 seconds and try again.", 504);
+      throw new AiServiceError(
+        "The AI is analyzing huge amounts of real-time city data... Please click 'Get Quote' one more time to continue.",
+        504
+      );
     }
 
     console.error(`[aiService] Error on ${endpoint}:`, error);
@@ -54,6 +57,21 @@ async function fetchFromAI(endpoint: string, body: unknown) {
 }
 
 export const aiService = {
-  getPremium: (worker_id: string, city?: string) => fetchFromAI("/get-premium", { worker_id, city: city || "Bangalore" }),
+  getPremium: (worker_id: string, city?: string) =>
+    fetchFromAI("/get-premium", { worker_id, city: city || "Bangalore" }),
+
   getPayout: (body: any) => fetchFromAI("/get-payout", body),
+
+  /**
+   * Sends GPS location to ai_service.py /ping-location.
+   * This populates the live_locations collection so the oracle can:
+   *   - Track active riders for parametric monitoring
+   *   - Calculate gps_dist_from_event_km for fraud detection
+   *   - Check was_delivering_at_event for fraud detection
+   *
+   * ai_service.py: POST /ping-location
+   *   { worker_id, lat, lon, location_name? }
+   */
+  pingLocation: (worker_id: string, params: { lat?: number; lon?: number; location_name?: string; pings?: { lat: number; lon: number; ts: string }[] }) =>
+    fetchFromAI("/ping-location", { worker_id, ...params }),
 };

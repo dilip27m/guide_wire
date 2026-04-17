@@ -44,7 +44,7 @@ export default function ProfilePage() {
     );
   }
 
-  const activePolicy = dbData?.policies?.find((p) => p.status === "active");
+  const activePolicy = dbData?.policies?.find((p) => p.status === "ACTIVE");
   const totalPayouts = dbData?.payouts?.reduce((sum, p) => sum + p.amount, 0) || 0;
   const totalClaims = dbData?.payouts?.length || 0;
 

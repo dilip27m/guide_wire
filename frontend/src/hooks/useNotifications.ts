@@ -33,6 +33,7 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions, react-hooks/exhaustive-deps
     setNotifications(loadFromStorage());
   }, []);
 

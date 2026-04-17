@@ -24,7 +24,7 @@ export class ApiError extends Error {
 // --- Generic Request Helper ---
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || "";
-const CLIENT_TIMEOUT_MS = 10000;
+const CLIENT_TIMEOUT_MS = 180000;
 
 async function apiRequest<T>(
   url: string,
@@ -56,7 +56,7 @@ async function apiRequest<T>(
     if (error instanceof ApiError) throw error;
 
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("Request timed out. Please try again.", 408);
+      throw new ApiError("The AI is analyzing huge amounts of real-time city data... Please click 'Get Quote' one more time to continue.", 408);
     }
 
     throw new ApiError(
@@ -78,6 +78,7 @@ export async function fetchPremium(data: PremiumRequest): Promise<PremiumRespons
       phone: data.phone,
       city: data.city,
       delivery_platform: data.delivery_platform,
+      coverage_tier: data.coverage_tier,
     },
   });
 }

@@ -15,6 +15,9 @@ export default function DashboardStats({ data, workerId, platform, payouts = [] 
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     return d >= weekAgo;
   }).length;
+  const coveragePct = data.forecasted_income > 0
+    ? Math.min((totalProtected / data.forecasted_income) * 100, 999)
+    : 0;
 
   const stats = [
     {
@@ -45,6 +48,13 @@ export default function DashboardStats({ data, workerId, platform, payouts = [] 
       icon: "📊",
       color: "bg-purple-200",
     },
+    {
+      label: "Coverage %",
+      value: `${coveragePct.toFixed(1)}%`,
+      sub: "Payout / forecast",
+      icon: "📈",
+      color: "bg-orange-200",
+    },
   ];
 
   return (
@@ -68,7 +78,7 @@ export default function DashboardStats({ data, workerId, platform, payouts = [] 
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <div
             key={stat.label}

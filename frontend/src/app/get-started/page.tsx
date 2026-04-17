@@ -46,17 +46,17 @@ export default function GetStartedPage() {
     setError(null);
     
     const wData: WorkerData = {
-      worker_id: dashboardData.worker.worker_id,
-      name: dashboardData.worker.name,
-      city: dashboardData.worker.city,
+      worker_id: dashboardData.worker.partner_id,     // aligned with delivery_partners.partner_id
+      name:      dashboardData.worker.name,
+      city:      dashboardData.worker.city_name,      // aligned with delivery_partners.city_name
       delivery_platform: dashboardData.worker.platform,
-      phone: "1234567890", // placeholder as phone isn't tracked explicitly
+      phone:     dashboardData.worker.phone || "0000000000",
     };
     
     setWorkerData(wData);
 
     // If they already have an active policy, bypass everything
-    if (dashboardData.policy && dashboardData.policy.status === "active") {
+    if (dashboardData.policy && dashboardData.policy.status === "ACTIVE") {  // uppercase — aligned with ai_service.py
       const pData: PremiumResponse = {
         status: "active",
         hourly_rate: 60, // Standard baseline
