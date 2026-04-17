@@ -17,11 +17,11 @@ import { LiveLocation } from "@/models/LiveLocation";
  */
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
-  const { worker_id, lat, lon, location_name } = body;
+  const { worker_id, lat, lon, location_name, pings } = body;
 
-  if (!worker_id || lat === undefined || lon === undefined) {
+  if (!worker_id) {
     return NextResponse.json(
-      { error: "worker_id, lat, and lon are required" },
+      { error: "worker_id is required" },
       { status: 400 }
     );
   }
@@ -29,18 +29,29 @@ export async function POST(req: NextRequest) {
   try {
     await connectDB();
 
-    await LiveLocation.findOneAndUpdate(
-      { rider_id: worker_id },
-      {
-        rider_id:      worker_id,
-        lat:           lat,
-        lon:           lon,
-        location_name: location_name || "Unknown",
-        status:        "ACTIVE",               // uppercase — ai_service.py: find({"status": "ACTIVE"})
-        last_ping:     new Date(),
-      },
-      { upsert: true, new: true }
-    );
+    let finalLat = lat;
+    let finalLon = lon;
+    
+    if (pings && pings.length > 0) {
+      const lastPing = pings[pings.length - 1];
+      finalLat = lastPing.lat;
+      finalLon = lastPing.lon;
+    }
+
+    if (finalLat !== undefined && finalLon !== undefined) {
+      await LiveLocation.findOneAndUpdate(
+        { rider_id: worker_id },
+        {
+          rider_id:      worker_id,
+          lat:           finalLat,
+          lon:           finalLon,
+          location_name: location_name || "Unknown",
+          status:        "ACTIVE",
+          last_ping:     new Date(),
+        },
+        { upsert: true, new: true }
+      );
+    }
 
     return NextResponse.json({
       status:  "success",

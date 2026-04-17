@@ -52,15 +52,14 @@ export const payoutService = {
         trigger_source: "simulation",
       });
 
-      // Create payout record — status "simulated" so settle-week can process it
-      // IMPORTANT FIX: was "completed" which broke settle-week/route.ts query
+      // Create payout record — status "completed" for Zero-Touch flow
       const payoutId = `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       await Payout.create({
         payout_id:     payoutId,
         worker_id:     body.worker_id || "unknown",
         disruption_id: body.disruption_id,
         amount:        aiData.payout_amount,
-        status:        "simulated", // settle-week/route.ts queries status:"simulated"
+        status:        "completed", 
       });
 
       return {

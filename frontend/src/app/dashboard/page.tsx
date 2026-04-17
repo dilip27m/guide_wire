@@ -12,6 +12,7 @@ import { useSessionData } from "@/hooks/useSessionData";
 import { useNotifications } from "@/hooks/useNotifications";
 import { fetchWorkerDashboard } from "@/lib/api";
 import { DashboardData } from "@/lib/types";
+import { aiService } from "@/services/aiService";
 
 const AI_SERVICE_URL = process.env.NEXT_PUBLIC_FASTAPI_URL || "http://localhost:8000";
 
@@ -23,9 +24,7 @@ export default function DashboardPage() {
   const [dbLoading, setDbLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
 
-  // Settlement state
-  const [settling, setSettling] = useState(false);
-  const [settlementMsg, setSettlementMsg] = useState<{ type: "success" | "info" | "error"; text: string } | null>(null);
+
 
   // Payout receipt modal state
   const [receiptData, setReceiptData] = useState<{
@@ -59,13 +58,49 @@ export default function DashboardPage() {
     loadDashboard();
   }, [isLoaded, workerData, loadDashboard]);
 
+  // ── GPS Batching & Polling ─────────────────────────────────────────────────
+  const gpsQueue = useRef<{ lat: number; lon: number; ts: string }[]>([]);
+  
+  useEffect(() => {
+    if (!isLoaded || !workerData) return;
+
+    // Simulate location gathering (creates slight jitter around base coord)
+    const gatherInterval = setInterval(() => {
+      const baseLat = 12.9716; // Bangalore base
+      const baseLon = 77.5946;
+      gpsQueue.current.push({
+        lat: baseLat + (Math.random() - 0.5) * 0.01,
+        lon: baseLon + (Math.random() - 0.5) * 0.01,
+        ts: new Date().toISOString(),
+      });
+    }, 2000); // gather every 2 seconds
+
+    // Flush batch to backend every 10 seconds (5 pings per batch)
+    const flushInterval = setInterval(() => {
+      if (gpsQueue.current.length > 0) {
+        const batch = [...gpsQueue.current];
+        gpsQueue.current = [];
+        
+        aiService.pingLocation(workerData.worker_id, {
+          location_name: workerData.city || "Bangalore",
+          pings: batch
+        }).catch(err => console.error("GPS Batch Error:", err));
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(gatherInterval);
+      clearInterval(flushInterval);
+    };
+  }, [isLoaded, workerData]);
+
   // ── Oracle Auto-Payout Polling (every 30s) ─────────────────────────────────
   useEffect(() => {
     if (!isLoaded || !workerData) return;
 
     const pollOraclePayout = async () => {
       try {
-        const res = await fetch(`${AI_SERVICE_URL}/latest-payout`, { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(`${AI_SERVICE_URL}/latest-payout?worker_id=${workerData.worker_id}`, { signal: AbortSignal.timeout(8000) });
         if (!res.ok) return;
         const data = await res.json();
         if (data.status === "ok" && data.payout) {
@@ -77,12 +112,27 @@ export default function DashboardPage() {
           ) {
             lastSeenPayoutId.current = p.disruption_id;
             setActiveDisruption(p);
+
+            const msg = `₹${p.payout_amount.toFixed(2)} credited for ${p.trigger.replaceAll("_", " ")} disruption`;
+            
             addNotification({
               type: "settlement",
               title: "🚨 Oracle Auto-Payout!",
-              message: `₹${p.payout_amount.toFixed(2)} credited for ${p.trigger} disruption`,
+              message: msg,
               amount: p.payout_amount,
             });
+
+            // Trigger zero-touch instant Payout Animation
+            setReceiptData({
+              amount: p.payout_amount,
+              weekLabel: new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+              payoutCount: 1,
+            });
+            setReceiptOpen(true);
+            
+            // Refresh to show in Transaction Log
+            loadDashboard();
+
             // Auto-dismiss banner after 60s
             setTimeout(() => setActiveDisruption(null), 60_000);
           }
@@ -112,57 +162,6 @@ export default function DashboardPage() {
     );
   }
 
-  // ── Simulate Week End ──────────────────────────────────────────────────────
-  const handleSettleWeek = async () => {
-    setSettling(true);
-    setSettlementMsg(null);
-    try {
-      const res = await fetch("/api/settle-week", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ worker_id: workerData.worker_id }),
-      });
-      const data = await res.json();
-
-      if (data.status === "NOTHING_TO_SETTLE") {
-        setSettlementMsg({ type: "info", text: "No pending payouts this week to settle." });
-      } else if (data.status === "SETTLED") {
-        const msg = `₹${data.total_payout.toFixed(2)} transferred for ${data.payout_count} claim${data.payout_count !== 1 ? "s" : ""}.`;
-        setSettlementMsg({ type: "success", text: `Week settled! ${msg}` });
-
-        // 🆕 Show UPI receipt modal animation FIRST
-        setReceiptData({
-          amount:      data.total_payout,
-          weekLabel:   data.week_label,
-          payoutCount: data.payout_count,
-        });
-        setReceiptOpen(true);
-
-        // Push persistent notification to the bell
-        addNotification({
-          type:       "settlement",
-          title:      "💸 Payout Received!",
-          message:    msg,
-          amount:     data.total_payout,
-          week_label: data.week_label,
-        });
-
-        // Refresh payout list to show new "completed" status
-        loadDashboard();
-      } else {
-        throw new Error(data.error || "Unknown error");
-      }
-    } catch (err) {
-      setSettlementMsg({
-        type: "error",
-        text: err instanceof Error ? err.message : "Settlement failed",
-      });
-    } finally {
-      setSettling(false);
-      // Auto-dismiss after 6 seconds
-      setTimeout(() => setSettlementMsg(null), 6000);
-    }
-  };
 
   return (
     <>

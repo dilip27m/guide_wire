@@ -39,9 +39,10 @@ export interface PolicyActivationRequest {
 /** Sent to POST /api/ping-location (and forwarded to ai_service.py /ping-location) */
 export interface LocationPingRequest {
   worker_id: string;
-  lat: number;
-  lon: number;
+  lat?: number;
+  lon?: number;
   location_name?: string;
+  pings?: { lat: number; lon: number; ts: string }[];
 }
 
 // --- Response Types ---

@@ -72,6 +72,6 @@ export const aiService = {
    * ai_service.py: POST /ping-location
    *   { worker_id, lat, lon, location_name? }
    */
-  pingLocation: (worker_id: string, lat: number, lon: number, location_name?: string) =>
-    fetchFromAI("/ping-location", { worker_id, lat, lon, location_name }),
+  pingLocation: (worker_id: string, params: { lat?: number; lon?: number; location_name?: string; pings?: { lat: number; lon: number; ts: string }[] }) =>
+    fetchFromAI("/ping-location", { worker_id, ...params }),
 };

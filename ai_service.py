@@ -30,7 +30,7 @@ import torch.nn.functional as F
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from torch_geometric.nn import GATConv, global_mean_pool, global_max_pool
@@ -58,6 +58,7 @@ try:
     history_collection = database["rider_history"]
     live_locations_collection = database["live_locations"]
     gps_ping_log_collection = database["gps_ping_log"]   # FIX: append-only log for speed detection
+    payouts_collection = database["payouts"]
     print("✅ Connected to Async MongoDB")
 except Exception as e:
     print(f"❌ MongoDB Connection Failed: {e}")
@@ -501,37 +502,51 @@ async def monitoring_oracle():
     """
     await asyncio.sleep(15)
 
-    global active_events, latest_payout
+    global active_events
     while True:
         try:
             active_riders = await get_active_riders_from_db()
             if not active_riders:
                 active_riders = [FALLBACK_RIDER]
 
+            geo_cache = {}
+
             for rider in active_riders:
                 rider_id = rider.get('rider_id', rider.get('worker_id', 'unknown'))
                 lat, lon = rider['lat'], rider['lon']
                 city     = rider.get('location_name', 'Bangalore').split(',')[-1].strip()
 
-                # Fetch all trigger data concurrently
-                # FIX: fetch_weather_history only takes 2 positional args (lat, lon);
-                #      days= is a keyword-only default. Pass days=1 as kwarg.
-                rain_future    = asyncio.to_thread(fetch_imd_alert,  lat, lon)
-                news_future    = asyncio.to_thread(fetch_news_events, city)
-                aqi_future     = asyncio.to_thread(fetch_aqi,         lat, lon)
-                weather_future = asyncio.to_thread(fetch_weather_history, lat, lon)
+                if city not in geo_cache:
+                    rain_future    = asyncio.to_thread(fetch_imd_alert,  lat, lon)
+                    news_future    = asyncio.to_thread(fetch_news_events, city)
+                    aqi_future     = asyncio.to_thread(fetch_aqi,         lat, lon)
+                    weather_future = asyncio.to_thread(fetch_weather_history, lat, lon)
 
-                try:
-                    rain_result, news_snippets, aqi_result, weather_arr = await asyncio.gather(
-                        rain_future, news_future, aqi_future, weather_future
-                    )
-                    _, rain_mm, rain_reason   = rain_result
-                    is_aqi_bad, aqi_val, aqi_reason = aqi_result
-                    # Use last day of full weather history for heatwave check
-                    weather_today = weather_arr[-1:] if len(weather_arr) > 0 else weather_arr
-                except Exception as e:
-                    print(f"Oracle API Fetch Error for {city}: {e}")
+                    try:
+                        rain_result, news_snippets, aqi_result, weather_arr = await asyncio.gather(
+                            rain_future, news_future, aqi_future, weather_future
+                        )
+                        geo_cache[city] = {
+                            "rain_result": rain_result,
+                            "news_snippets": news_snippets,
+                            "aqi_result": aqi_result,
+                            "weather_arr": weather_arr
+                        }
+                    except Exception as e:
+                        print(f"Oracle API Fetch Error for {city}: {e}")
+                        geo_cache[city] = None
+                        
+                cached_data = geo_cache.get(city)
+                if not cached_data:
                     continue
+                    
+                _, rain_mm, rain_reason   = cached_data["rain_result"]
+                is_aqi_bad, aqi_val, aqi_reason = cached_data["aqi_result"]
+                news_snippets = cached_data["news_snippets"]
+                weather_arr = cached_data["weather_arr"]
+                
+                # Use last day of full weather history for heatwave check
+                weather_today = weather_arr[-1:] if len(weather_arr) > 0 else weather_arr
 
                 road_events              = extract_events_fast(news_snippets)
                 is_heatwave, temp, heat_reason = check_heatwave(weather_today)
@@ -570,18 +585,26 @@ async def monitoring_oracle():
                     )
                     payout = impact.get("payout_amount", round(hourly_rate * duration_hrs, 2))
 
-                    latest_payout = {
+                    payout_id = f"PAY-{int(time.time())}-{uuid.uuid4().hex[:4]}"
+                    db_payout = {
+                        "payout_id":                payout_id,
+                        "worker_id":                rider_id,
                         "rider_id":                 rider_id,
                         "disruption_id":            event["id"],
+                        "amount":                   payout,
                         "payout_amount":            payout,
+                        "status":                   "completed",
                         "forecasted_weekly_income": forecast,
                         "duration":                 round(duration_hrs, 2),
                         "location":                 rider.get("location_name", "Unknown"),
                         "trigger":                  event["trigger"],
                         "settled_at":               datetime.now().strftime("%H:%M:%S"),
+                        "timestamp":                datetime.now()
                     }
                     del active_events[rider_id]
-                    print(f"✅ SETTLEMENT: Payout ₹{payout:.0f} for {rider_id} [trigger: {event['trigger']}].")
+                    
+                    await payouts_collection.insert_one(db_payout)
+                    print(f"✅ DB SETTLEMENT: Payout ₹{payout:.0f} for {rider_id} [trigger: {event['trigger']}].")
 
         except Exception as e:
             print(f"Oracle Error: {e}")
@@ -605,11 +628,17 @@ app.add_middleware(
 # ─────────────────────────────────────────────
 # PYDANTIC SCHEMAS
 # ─────────────────────────────────────────────
+class PingData(BaseModel):
+    lat: float
+    lon: float
+    ts:  str
+
 class LocationPingRequest(BaseModel):
     worker_id:     str
-    lat:           float
-    lon:           float
+    lat:           Optional[float] = None
+    lon:           Optional[float] = None
     location_name: Optional[str] = "Unknown"
+    pings:         Optional[List[PingData]] = None
 
 class PremiumRequest(BaseModel):
     worker_id: str
@@ -643,30 +672,51 @@ async def post_ping_location(req: LocationPingRequest):
     we now also APPEND each ping to gps_ping_log so /get-payout can query the
     last 2 pings by timestamp and compute real speed (was always 0.5 default).
     """
-    ping_ts = datetime.now()
-    # 1. Upsert live_locations — oracle uses this to find active riders
-    await live_locations_collection.update_one(
-        {"rider_id": req.worker_id},
-        {
-            "$set": {
-                "lat": req.lat,
-                "lon": req.lon,
+    if req.pings and len(req.pings) > 0:
+        latest = req.pings[-1]
+        lat, lon = latest.lat, latest.lon
+        
+        log_docs = []
+        for p in req.pings:
+            try:
+                dt = datetime.fromisoformat(p.ts.replace('Z', '+00:00'))
+            except Exception:
+                dt = datetime.now()
+            log_docs.append({
+                "rider_id": req.worker_id,
+                "lat": p.lat,
+                "lon": p.lon,
                 "location_name": req.location_name,
-                "status": "ACTIVE",
-                "last_ping": ping_ts
-            }
-        },
-        upsert=True
-    )
-    # 2. Append to gps_ping_log — fraud detection reads last 2 docs sorted by ts
-    await gps_ping_log_collection.insert_one({
-        "rider_id": req.worker_id,
-        "lat": req.lat,
-        "lon": req.lon,
-        "location_name": req.location_name,
-        "ts": ping_ts,
-    })
-    return {"status": "success", "message": f"GPS location logged for {req.worker_id}"}
+                "ts": dt
+            })
+        await gps_ping_log_collection.insert_many(log_docs)
+    else:
+        lat, lon = req.lat, req.lon
+        if lat is not None and lon is not None:
+            await gps_ping_log_collection.insert_one({
+                "rider_id": req.worker_id,
+                "lat": lat,
+                "lon": lon,
+                "location_name": req.location_name,
+                "ts": datetime.now(),
+            })
+
+    if lat is not None and lon is not None:
+        await live_locations_collection.update_one(
+            {"rider_id": req.worker_id},
+            {
+                "$set": {
+                    "lat": lat,
+                    "lon": lon,
+                    "location_name": req.location_name,
+                    "status": "ACTIVE",
+                    "last_ping": datetime.now()
+                }
+            },
+            upsert=True
+        )
+
+    return {"status": "success", "message": f"GPS trace(s) logged for {req.worker_id}"}
 
 
 @app.post("/get-premium")
@@ -875,14 +925,21 @@ async def post_get_payout(req: PayoutRequest):
 
 
 @app.get("/latest-payout")
-async def get_latest_payout():
-    """GET /latest-payout — Worker dashboard polls this every 30s to show oracle auto-payouts.
-    Returns the most recent payout settled by the monitoring oracle, or null if none yet.
-    Frontend: useEffect with setInterval(30_000) in dashboard/page.tsx.
+async def get_latest_payout(worker_id: Optional[str] = None):
+    """GET /latest-payout — 
+    Returns the most recent payout settled by the monitoring oracle.
+    Now pulls from MongoDB, preventing multi-user race condition data loss.
     """
-    if latest_payout is None:
-        return {"status": "no_payout", "payout": None}
-    return {"status": "ok", "payout": latest_payout}
+    query = {"status": "completed", "trigger": {"$ne": "manual_simulation"}}
+    if worker_id:
+        query["worker_id"] = worker_id
+        
+    latest_doc = await payouts_collection.find_one(query, sort=[("timestamp", -1)])
+    if latest_doc:
+        latest_doc["_id"] = str(latest_doc["_id"])
+        return {"status": "ok", "payout": latest_doc}
+        
+    return {"status": "no_payout", "payout": None}
 
 
 @app.post("/settle-week")
