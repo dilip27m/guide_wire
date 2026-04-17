@@ -55,6 +55,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isLoaded || !workerData) return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     loadDashboard();
   }, [isLoaded, workerData, loadDashboard]);
 
@@ -145,7 +146,7 @@ export default function DashboardPage() {
     pollOraclePayout(); // immediate first check
     const interval = setInterval(pollOraclePayout, 30_000);
     return () => clearInterval(interval);
-  }, [isLoaded, workerData, addNotification]);
+  }, [isLoaded, workerData, addNotification, loadDashboard]);
 
 
   if (!isLoaded) return null;

@@ -73,12 +73,12 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: {
-        total_workers:     totalWorkers,
-        active_policies:   activePolicies,
-        total_premiums:    totalPremiums,
-        total_payouts:     totalPayouts,
-        loss_ratio:        roundTo(lossRatio, 2),
-        recent_claims:     recentClaims,
+        total_workers: totalWorkers,
+        active_policies: activePolicies,
+        total_premiums: totalPremiums,
+        total_payouts: totalPayouts,
+        loss_ratio: roundTo(lossRatio, 2),
+        recent_claims: recentClaims,
         city_risk_indexes,
       },
     });

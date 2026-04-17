@@ -39,7 +39,11 @@ export default function PayoutReceiptModal({
   // Masked account number derived from workerId for realism
   const maskedAccount = `XXXX${workerId.replace(/[^0-9]/g, "").slice(-4).padStart(4, "9")}`;
   const upiId = `${workerId.toLowerCase().replace(/[^a-z0-9]/g, "")}@dashsure`;
-  const txnRef = `TXN${Date.now().toString().slice(-8)}`;
+  const [txnRef, setTxnRef] = useState<string>("");
+
+  useEffect(() => {
+    setTxnRef(`TXN${Date.now().toString().slice(-8)}`);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
